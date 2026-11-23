@@ -1,0 +1,17 @@
+[package]
+name = "estudy-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Camada de interface MVU do eStudy: shell principal, Barra de Comando Ctrl+K e Home em 3 colunas."
+
+[dependencies]
+chrono.workspace = true
+estudy-domain = { path = "../estudy-domain" }
+estudy-ui-kit = { path = "../estudy-ui-kit" }
+iced.workspace = true
+
+[lints]
+workspace = true

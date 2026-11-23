@@ -1,0 +1,19 @@
+[package]
+name = "estudy-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Binário desktop do eStudy conectando domínio, persistência SQLite WAL e interface Iced."
+
+[dependencies]
+chrono.workspace = true
+estudy-domain = { path = "../../crates/estudy-domain" }
+estudy-storage = { path = "../../crates/estudy-storage" }
+estudy-ui = { path = "../../crates/estudy-ui" }
+estudy-ui-kit = { path = "../../crates/estudy-ui-kit" }
+iced.workspace = true
+
+[lints]
+workspace = true
