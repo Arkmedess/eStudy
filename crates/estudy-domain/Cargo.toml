@@ -1,0 +1,20 @@
+[package]
+name = "estudy-domain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Núcleo de domínio puro do eStudy: entidades, regras de negócio, portas e cadeia HMAC da carteira."
+
+[dependencies]
+chrono.workspace = true
+hex.workspace = true
+hmac.workspace = true
+serde.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
