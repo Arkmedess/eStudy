@@ -58,6 +58,8 @@ pub enum PaletteAction {
     LogMoodQuick,
     /// Sorteia a próxima leitura da estante TBR.
     RandomTbrBook,
+    /// Registra avanço rápido de leitura em páginas.
+    QuickReadingProgress(u16),
     /// Dispara exportação de snapshot limpo para a nuvem.
     ExportCloudSnapshot,
     /// Alterna entre os 5 presets de tema.
@@ -370,6 +372,14 @@ fn action_commands() -> Vec<PaletteCommand> {
             action: PaletteAction::RandomTbrBook,
         },
         PaletteCommand {
+            id: "reading-10p",
+            label: "> +10p <livro>",
+            hint: "Registrar 10 páginas lidas na obra atual",
+            shortcut: None,
+            icon: Icon::BookOpen,
+            action: PaletteAction::QuickReadingProgress(10),
+        },
+        PaletteCommand {
             id: "cloud-backup",
             label: "> backup nuvem",
             hint: "Exportar snapshot SQLite limpo para pasta de nuvem",
@@ -445,6 +455,22 @@ fn navigation_commands() -> Vec<PaletteCommand> {
             shortcut: None,
             icon: Icon::Sprout,
             action: PaletteAction::Navigate(AppRoute::GardenAndPets),
+        },
+        PaletteCommand {
+            id: "nav-shop",
+            label: "Ir para Loja",
+            hint: "Trocar moedas por temas, pets, molduras e faixas",
+            shortcut: None,
+            icon: Icon::ShoppingBag,
+            action: PaletteAction::Navigate(AppRoute::Shop),
+        },
+        PaletteCommand {
+            id: "nav-settings",
+            label: "Ir para Configurações",
+            hint: "Backup na nuvem, permissões MCP e preferências",
+            shortcut: None,
+            icon: Icon::Settings,
+            action: PaletteAction::Navigate(AppRoute::Settings),
         },
     ]
 }

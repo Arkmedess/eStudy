@@ -14,6 +14,7 @@ estudy-storage = { path = "../../crates/estudy-storage" }
 estudy-ui = { path = "../../crates/estudy-ui" }
 estudy-ui-kit = { path = "../../crates/estudy-ui-kit" }
 iced.workspace = true
+rusqlite.workspace = true
 
 [lints]
 workspace = true

@@ -13,13 +13,23 @@ use iced::{Alignment, Element, Length, Subscription};
 use std::sync::Arc;
 
 use crate::command_palette::{AppRoute, CommandPaletteState, PaletteAction, PaletteMessage};
-use crate::features::home::{HomeDashboardData, HomeLoadState, HomeMessage, view_home};
+use crate::features::home::{
+    HomeDashboardData, HomeLoadState, HomeMessage, MoodViewMode, view_home,
+};
 
 /// Mensagens raiz do shell MVU do eStudy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppMessage {
     /// Navega para uma rota principal.
     Navigate(AppRoute),
+    /// Dispara o atalho rápido de Foco/Pomodoro na topbar.
+    QuickFocusShortcut,
+    /// Abre ou fecha o popover de notificações e conquistas.
+    ToggleNotifications,
+    /// Abre ou fecha o menu compacto de módulos.
+    ToggleModulesMenu,
+    /// Fecha menus e overlays abertos (`Escape`).
+    CloseOverlays,
     /// Alterna o próximo preset de tema oficial.
     CycleThemePreset,
     /// Alterna entre modo claro e escuro.
@@ -39,6 +49,10 @@ pub struct EstudyApp {
     pub loadout: CosmeticLoadout,
     /// Estado da Barra de Comando (`Ctrl+K`).
     pub palette: CommandPaletteState,
+    /// Estado do popover de notificações/conquistas.
+    pub notifications_open: bool,
+    /// Estado do menu compacto de módulos.
+    pub modules_menu_open: bool,
     /// Estado da fatia Home.
     pub home_state: HomeLoadState,
     /// Mensagem de feedback transitório da ação mais recente.
@@ -54,6 +68,8 @@ impl EstudyApp {
             route: AppRoute::Home,
             loadout: CosmeticLoadout::default(),
             palette: CommandPaletteState::new(),
+            notifications_open: false,
+            modules_menu_open: false,
             home_state,
             status_banner: None,
         }
@@ -84,6 +100,26 @@ impl EstudyApp {
             AppMessage::Navigate(route) => {
                 self.route = route;
                 self.palette.close();
+                self.notifications_open = false;
+                self.modules_menu_open = false;
+            }
+            AppMessage::QuickFocusShortcut => {
+                self.notifications_open = false;
+                self.modules_menu_open = false;
+                self.status_banner = Some("Bloco de foco de 25 min preparado.".to_string());
+            }
+            AppMessage::ToggleNotifications => {
+                self.notifications_open = !self.notifications_open;
+                self.modules_menu_open = false;
+            }
+            AppMessage::ToggleModulesMenu => {
+                self.modules_menu_open = !self.modules_menu_open;
+                self.notifications_open = false;
+            }
+            AppMessage::CloseOverlays => {
+                self.palette.close();
+                self.notifications_open = false;
+                self.modules_menu_open = false;
             }
             AppMessage::CycleThemePreset => {
                 self.loadout.theme_preset = self.loadout.theme_preset.next();
@@ -125,7 +161,11 @@ impl EstudyApp {
         });
 
         if self.palette.is_open {
-            stack![shell, self.palette.view(theme, AppMessage::Palette),].into()
+            stack![shell, self.palette.view(theme, AppMessage::Palette)].into()
+        } else if self.notifications_open {
+            stack![shell, view_notifications_popover(theme)].into()
+        } else if self.modules_menu_open {
+            stack![shell, view_modules_popover(self.route, theme)].into()
         } else {
             shell.into()
         }
@@ -180,6 +220,10 @@ impl EstudyApp {
                 self.route = AppRoute::Bookshelf;
                 self.status_banner = Some("Estante pronta para sortear leitura.".to_string());
             }
+            PaletteAction::QuickReadingProgress(pages) => {
+                self.route = AppRoute::Bookshelf;
+                self.status_banner = Some(format!("+{pages} páginas registradas na leitura."));
+            }
             PaletteAction::ExportCloudSnapshot => {
                 self.route = AppRoute::Settings;
                 self.status_banner = Some("Snapshot limpo pronto para exportação.".to_string());
@@ -192,6 +236,14 @@ impl EstudyApp {
             HomeMessage::SelectTodayMood(level) => {
                 if let HomeLoadState::Ready(data) = &mut self.home_state {
                     data.set_today_mood(level);
+                }
+            }
+            HomeMessage::ToggleMoodViewMode => {
+                if let HomeLoadState::Ready(data) = &mut self.home_state {
+                    data.mood_view = match data.mood_view {
+                        MoodViewMode::Week => MoodViewMode::Year,
+                        MoodViewMode::Year => MoodViewMode::Week,
+                    };
                 }
             }
             HomeMessage::SelectBoardFrame(frame) => {
@@ -251,6 +303,21 @@ impl EstudyApp {
             cmd_btn,
             button(
                 row![
+                    icon_svg(Icon::Timer, 14.0, theme.accent),
+                    text("Focar").size(12).color(theme.text_primary),
+                ]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
+            )
+            .on_press(AppMessage::QuickFocusShortcut)
+            .padding([SPACE_2, SPACE_3])
+            .style(move |_, status| theme.ghost_button_style(status)),
+            button(icon_svg(Icon::Bell, 15.0, theme.text_primary))
+                .on_press(AppMessage::ToggleNotifications)
+                .padding(SPACE_2)
+                .style(move |_, status| theme.ghost_button_style(status)),
+            button(
+                row![
                     icon_svg(Icon::Palette, 14.0, theme.accent),
                     text(self.loadout.theme_preset.label())
                         .size(12)
@@ -266,10 +333,18 @@ impl EstudyApp {
                 .on_press(AppMessage::ToggleThemeMode)
                 .padding(SPACE_2)
                 .style(move |_, status| theme.ghost_button_style(status)),
-            nav_chip(AppRoute::Projects, self.route, theme),
-            nav_chip(AppRoute::Studies, self.route, theme),
-            nav_chip(AppRoute::Bookshelf, self.route, theme),
-            nav_chip(AppRoute::GardenAndPets, self.route, theme),
+            button(
+                row![
+                    icon_svg(Icon::LayoutGrid, 14.0, theme.accent),
+                    text("Módulos").size(12).color(theme.text_primary),
+                    icon_svg(Icon::ChevronDown, 13.0, theme.text_muted),
+                ]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
+            )
+            .on_press(AppMessage::ToggleModulesMenu)
+            .padding([SPACE_2, SPACE_3])
+            .style(move |_, status| theme.ghost_button_style(status)),
         ]
         .spacing(SPACE_2)
         .align_y(Alignment::Center);
@@ -325,23 +400,90 @@ impl EstudyApp {
     }
 }
 
-fn nav_chip(route: AppRoute, active: AppRoute, theme: EstudyTheme) -> Element<'static, AppMessage> {
-    let is_active = route == active;
-    button(text(route.label()).size(12).color(if is_active {
-        theme.on_accent
-    } else {
-        theme.text_primary
-    }))
-    .on_press(AppMessage::Navigate(route))
-    .padding([6.0, 10.0])
-    .style(move |_, status| {
-        if is_active {
-            theme.primary_button_style(status)
+fn view_notifications_popover<'a>(theme: EstudyTheme) -> Element<'a, AppMessage> {
+    let close_btn = button(icon_svg(Icon::X, 14.0, theme.text_muted))
+        .on_press(AppMessage::CloseOverlays)
+        .padding(4.0)
+        .style(move |_, status| theme.ghost_button_style(status));
+
+    let popover = card(
+        column![
+            row![
+                section_header(Icon::Trophy, "Notificações e Conquistas", theme),
+                container(close_btn).align_x(Alignment::End).width(Length::Fill),
+            ]
+            .align_y(Alignment::Center),
+            text("Nenhuma conquista pendente. Continue seu bloco de estudos para desbloquear novas medalhas.")
+                .size(12)
+                .color(theme.text_muted),
+        ]
+        .spacing(SPACE_3),
+        theme,
+    )
+    .width(Length::Fixed(320.0));
+
+    container(popover)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding([TOPBAR_HEIGHT + SPACE_2, SPACE_4])
+        .align_x(Alignment::End)
+        .into()
+}
+
+fn view_modules_popover<'a>(active: AppRoute, theme: EstudyTheme) -> Element<'a, AppMessage> {
+    let routes = [
+        (AppRoute::Home, Icon::Home),
+        (AppRoute::Projects, Icon::FolderKanban),
+        (AppRoute::Calendar, Icon::Calendar),
+        (AppRoute::Studies, Icon::GraduationCap),
+        (AppRoute::Bookshelf, Icon::BookOpen),
+        (AppRoute::GardenAndPets, Icon::Sprout),
+        (AppRoute::Shop, Icon::ShoppingBag),
+        (AppRoute::Settings, Icon::Settings),
+    ];
+
+    let mut items = column![].spacing(4.0);
+    for (route, icon) in routes {
+        let is_active = route == active;
+        let text_color = if is_active {
+            theme.on_accent
         } else {
-            theme.ghost_button_style(status)
-        }
-    })
-    .into()
+            theme.text_primary
+        };
+        let icon_color = if is_active {
+            theme.on_accent
+        } else {
+            theme.accent
+        };
+
+        items = items.push(
+            button(
+                row![
+                    icon_svg(icon, 14.0, icon_color),
+                    text(route.label()).size(13).color(text_color),
+                ]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
+            )
+            .on_press(AppMessage::Navigate(route))
+            .width(Length::Fill)
+            .padding([SPACE_2, SPACE_3])
+            .style(move |_, status| {
+                if is_active {
+                    theme.primary_button_style(status)
+                } else {
+                    theme.ghost_button_style(status)
+                }
+            }),
+        );
+    }
+
+    container(card(items, theme).width(Length::Fixed(220.0)))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding([TOPBAR_HEIGHT + SPACE_2, SPACE_4])
+        .align_x(Alignment::End)
+        .into()
 }
 
 fn view_module_placeholder<'a>(route: AppRoute, theme: EstudyTheme) -> Element<'a, AppMessage> {
@@ -386,7 +528,7 @@ fn map_shortcut(key: &Key, modifiers: Modifiers) -> Option<AppMessage> {
         return Some(AppMessage::Palette(PaletteMessage::Toggle));
     }
     if matches!(key, Key::Named(keyboard::key::Named::Escape)) {
-        return Some(AppMessage::Palette(PaletteMessage::Close));
+        return Some(AppMessage::CloseOverlays);
     }
     None
 }

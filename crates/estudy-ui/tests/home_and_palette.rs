@@ -6,7 +6,7 @@ use chrono::DateTime;
 use estudy_domain::FixedClock;
 use estudy_ui::{
     AppMessage, AppRoute, CommandPaletteState, EstudyApp, FocusPinItem, HomeDashboardData,
-    HomeLoadState, HomeMessage, MAX_FOCUS_PINS, MoodLevel, PaletteMessage,
+    HomeLoadState, HomeMessage, MAX_FOCUS_PINS, MoodLevel, MoodViewMode, PaletteMessage,
 };
 use estudy_ui_kit::{BoardFrameStyle, ThemeMode, ThemePreset};
 use std::sync::Arc;
@@ -144,4 +144,39 @@ fn should_recover_from_error_state_and_seed_from_empty_state() {
         &empty_app.home_state,
         HomeLoadState::Ready(home) if !home.is_empty_workspace()
     ));
+}
+
+#[test]
+fn should_toggle_modules_menu_notifications_and_mood_year_view() {
+    let mut app = make_app(
+        10,
+        HomeLoadState::Ready(Box::new(HomeDashboardData::sample_workspace("Arthur"))),
+    );
+
+    assert!(!app.modules_menu_open);
+    assert!(!app.notifications_open);
+
+    app.update(AppMessage::ToggleModulesMenu);
+    assert!(app.modules_menu_open);
+    assert!(!app.notifications_open);
+
+    app.update(AppMessage::ToggleNotifications);
+    assert!(app.notifications_open);
+    assert!(!app.modules_menu_open);
+
+    app.update(AppMessage::Navigate(AppRoute::Shop));
+    assert_eq!(app.route, AppRoute::Shop);
+    assert!(!app.notifications_open);
+
+    app.update(AppMessage::Home(HomeMessage::ToggleMoodViewMode));
+    assert!(matches!(
+        &app.home_state,
+        HomeLoadState::Ready(home) if home.mood_view == MoodViewMode::Year
+    ));
+
+    app.update(AppMessage::Palette(PaletteMessage::Toggle));
+    app.update(AppMessage::Palette(PaletteMessage::QueryChanged(
+        "+10p".to_string(),
+    )));
+    assert_eq!(app.palette.filtered_commands().len(), 1);
 }

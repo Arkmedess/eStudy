@@ -1,8 +1,8 @@
 //! Binário desktop principal do **eStudy** (Composition Root).
 
-use chrono::Utc;
-use estudy_domain::SystemClock;
-use estudy_storage::{AppPaths, apply_migrations, open_connection};
+use chrono::{SecondsFormat, Utc};
+use estudy_domain::{EntityId, SystemClock};
+use estudy_storage::{AppPaths, StorageError, apply_migrations, open_connection};
 use estudy_ui::{EstudyApp, HomeDashboardData, HomeLoadState};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,6 +15,29 @@ fn parse_data_dir_arg() -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn ensure_default_profile(conn: &rusqlite::Connection) -> Result<String, StorageError> {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT display_name FROM local_profiles WHERE deleted_at IS NULL ORDER BY created_at ASC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if let Some(name) = existing {
+        return Ok(name);
+    }
+
+    let id = EntityId::new_v7().to_string();
+    let now = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+    let default_name = "Estudante".to_string();
+    conn.execute(
+        "INSERT INTO local_profiles (id, display_name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![id, default_name, now, now],
+    )?;
+    Ok(default_name)
 }
 
 fn bootstrap_home_state() -> HomeLoadState {
@@ -37,7 +60,10 @@ fn bootstrap_home_state() -> HomeLoadState {
         return HomeLoadState::Error(err.to_string());
     }
 
-    HomeLoadState::Ready(Box::new(HomeDashboardData::sample_workspace("Estudante")))
+    match ensure_default_profile(&conn) {
+        Ok(name) => HomeLoadState::Ready(Box::new(HomeDashboardData::sample_workspace(name))),
+        Err(err) => HomeLoadState::Error(err.to_string()),
+    }
 }
 
 fn boot_app() -> EstudyApp {

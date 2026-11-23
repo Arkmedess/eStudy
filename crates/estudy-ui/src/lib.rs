@@ -13,6 +13,6 @@ pub use command_palette::{
 };
 pub use features::home::{
     FocusPinItem, HomeDashboardData, HomeLoadState, HomeMessage, MAX_FOCUS_PINS, MAX_PINNED_MEDALS,
-    MedalBadge, MoodDayEntry, MoodLevel, PinboardState, ProfileSummary, ProjectCardSummary,
-    TodayItem,
+    MedalBadge, MoodDayEntry, MoodLevel, MoodViewMode, PinboardState, ProfileSummary,
+    ProjectCardSummary, TodayItem,
 };

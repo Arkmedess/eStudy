@@ -59,6 +59,15 @@ impl MoodLevel {
     }
 }
 
+/// Modo de exibição do Diário de Humor (semana atual ou resumo anual).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MoodViewMode {
+    /// Últimos 7 dias + seletor rápido de hoje.
+    Week,
+    /// Resumo acumulado do ano por nível de humor.
+    Year,
+}
+
 /// Registro diário de humor dos últimos 7 dias.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MoodDayEntry {
@@ -161,6 +170,10 @@ pub struct HomeDashboardData {
     pub focus_items: Vec<FocusPinItem>,
     /// Últimos 7 dias do Diário de Humor.
     pub mood_week: Vec<MoodDayEntry>,
+    /// Modo de visualização ativo no Diário de Humor.
+    pub mood_view: MoodViewMode,
+    /// Contagem anual acumulada por nível de humor (`[Ótimo, Bom, Estável, Cansado]`).
+    pub mood_year_counts: [u16; 4],
     /// Quadro personalizável com moldura.
     pub pinboard: PinboardState,
 }
@@ -170,6 +183,8 @@ pub struct HomeDashboardData {
 pub enum HomeMessage {
     /// Seleciona o humor do dia atual (último item da semana).
     SelectTodayMood(MoodLevel),
+    /// Alterna entre visão de 7 dias e visão anual do Diário de Humor.
+    ToggleMoodViewMode,
     /// Altera a moldura do Quadro Personalizável.
     SelectBoardFrame(BoardFrameStyle),
     /// Alterna conclusão de um item do cartão "Hoje".
@@ -199,6 +214,8 @@ impl HomeDashboardData {
             projects: Vec::new(),
             focus_items: Vec::new(),
             mood_week: default_mood_week(None),
+            mood_view: MoodViewMode::Week,
+            mood_year_counts: [0; 4],
             pinboard: PinboardState {
                 caption: "Seu espaço de inspiração e foco".to_string(),
                 frame: BoardFrameStyle::Japandi,
@@ -231,6 +248,8 @@ impl HomeDashboardData {
             projects: sample_projects(),
             focus_items: sample_focus_items(),
             mood_week: default_mood_week(Some(MoodLevel::Good)),
+            mood_view: MoodViewMode::Week,
+            mood_year_counts: [48, 64, 31, 14],
             pinboard: PinboardState {
                 caption: "Um bloco de foco por vez.".to_string(),
                 frame: BoardFrameStyle::Japandi,

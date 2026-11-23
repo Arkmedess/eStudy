@@ -9,7 +9,7 @@ use iced::{Alignment, Element, Length};
 
 use super::state::{
     HomeDashboardData, HomeLoadState, HomeMessage, MAX_FOCUS_PINS, MAX_PINNED_MEDALS, MoodLevel,
-    ProjectCardSummary,
+    MoodViewMode, ProjectCardSummary,
 };
 use crate::command_palette::AppRoute;
 
@@ -452,24 +452,67 @@ fn view_mood_card<'a, Message: Clone + 'a>(
     theme: EstudyTheme,
     map_home: impl Fn(HomeMessage) -> Message + 'a,
 ) -> Element<'a, Message> {
-    let mut week_row = row![].spacing(SPACE_1).width(Length::Fill);
-    for day in &data.mood_week {
-        let icon = day.level.map_or(Icon::HelpCircle, MoodLevel::icon);
-        let color = if day.level.is_some() {
-            theme.accent
-        } else {
-            theme.text_muted
-        };
-        week_row = week_row.push(
-            column![
-                icon_svg(icon, 16.0, color),
-                text(&day.day_label).size(11).color(theme.text_muted),
-            ]
-            .spacing(SPACE_1)
-            .align_x(Alignment::Center)
-            .width(Length::Fill),
-        );
-    }
+    let toggle_label = match data.mood_view {
+        MoodViewMode::Week => "Ver Ano",
+        MoodViewMode::Year => "Ver 7d",
+    };
+
+    let header = row![
+        section_header(Icon::Smile, "Diário de Humor", theme),
+        container(
+            button(text(toggle_label).size(11).color(theme.text_primary))
+                .on_press(map_home(HomeMessage::ToggleMoodViewMode))
+                .padding([SPACE_1, SPACE_2])
+                .style(move |_, status| theme.ghost_button_style(status)),
+        )
+        .align_x(Alignment::End)
+        .width(Length::Fill),
+    ]
+    .align_y(Alignment::Center);
+
+    let body: Element<'a, Message> = match data.mood_view {
+        MoodViewMode::Week => {
+            let mut week_row = row![].spacing(SPACE_1).width(Length::Fill);
+            for day in &data.mood_week {
+                let icon = day.level.map_or(Icon::HelpCircle, MoodLevel::icon);
+                let color = if day.level.is_some() {
+                    theme.accent
+                } else {
+                    theme.text_muted
+                };
+                week_row = week_row.push(
+                    column![
+                        icon_svg(icon, 16.0, color),
+                        text(&day.day_label).size(11).color(theme.text_muted),
+                    ]
+                    .spacing(SPACE_1)
+                    .align_x(Alignment::Center)
+                    .width(Length::Fill),
+                );
+            }
+            week_row.into()
+        }
+        MoodViewMode::Year => {
+            let mut year_row = row![].spacing(SPACE_2).width(Length::Fill);
+            for (idx, mood) in MoodLevel::ALL.iter().enumerate() {
+                let count = data.mood_year_counts.get(idx).copied().unwrap_or(0);
+                year_row = year_row.push(
+                    panel(
+                        column![
+                            icon_svg(mood.icon(), 15.0, theme.accent),
+                            text(format!("{count}d")).size(12).color(theme.text_primary),
+                            text(mood.label()).size(10).color(theme.text_muted),
+                        ]
+                        .spacing(2.0)
+                        .align_x(Alignment::Center),
+                        theme,
+                    )
+                    .width(Length::Fill),
+                );
+            }
+            year_row.into()
+        }
+    };
 
     let mut mood_picker = row![].spacing(SPACE_1);
     for mood in MoodLevel::ALL {
@@ -487,16 +530,7 @@ fn view_mood_card<'a, Message: Clone + 'a>(
         mood_picker = mood_picker.push(btn);
     }
 
-    card(
-        column![
-            section_header(Icon::Smile, "Diário de Humor", theme),
-            week_row,
-            mood_picker,
-        ]
-        .spacing(SPACE_3),
-        theme,
-    )
-    .into()
+    card(column![header, body, mood_picker].spacing(SPACE_3), theme).into()
 }
 
 fn view_pinboard_card<'a, Message: Clone + 'a>(
@@ -523,31 +557,35 @@ fn view_pinboard_card<'a, Message: Clone + 'a>(
     .align_x(Alignment::Center)
     .style(move |_| theme.board_frame_style(active_frame));
 
-    let mut frame_chips = row![].spacing(SPACE_1);
-    for frame in BoardFrameStyle::ALL.iter().take(4) {
-        let is_active = *frame == active_frame;
-        let btn = button(text(frame.label()).size(11).color(if is_active {
-            theme.on_accent
-        } else {
-            theme.text_primary
-        }))
-        .on_press(map_home(HomeMessage::SelectBoardFrame(*frame)))
-        .padding([SPACE_1, SPACE_2])
-        .style(move |_, status| {
-            if is_active {
-                theme.primary_button_style(status)
+    let mut frame_rows = column![].spacing(SPACE_1);
+    for chunk in BoardFrameStyle::ALL.chunks(4) {
+        let mut frame_chips = row![].spacing(SPACE_1);
+        for frame in chunk {
+            let is_active = *frame == active_frame;
+            let btn = button(text(frame.label()).size(11).color(if is_active {
+                theme.on_accent
             } else {
-                theme.ghost_button_style(status)
-            }
-        });
-        frame_chips = frame_chips.push(btn);
+                theme.text_primary
+            }))
+            .on_press(map_home(HomeMessage::SelectBoardFrame(*frame)))
+            .padding([SPACE_1, SPACE_2])
+            .style(move |_, status| {
+                if is_active {
+                    theme.primary_button_style(status)
+                } else {
+                    theme.ghost_button_style(status)
+                }
+            });
+            frame_chips = frame_chips.push(btn);
+        }
+        frame_rows = frame_rows.push(frame_chips);
     }
 
     card(
         column![
             section_header(Icon::Frame, "Quadro Personalizável", theme),
             frame_preview,
-            frame_chips,
+            frame_rows,
         ]
         .spacing(SPACE_3),
         theme,
