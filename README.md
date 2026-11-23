@@ -22,6 +22,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 # Executar todos os testes unitários e de integração
 cargo test --workspace
+
+# Validação completa, build release e benchmark de RAM/logs
+bash scripts/bench_and_validate.sh
 ```
 
 ---
