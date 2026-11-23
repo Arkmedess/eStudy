@@ -16,6 +16,7 @@ use crate::command_palette::{AppRoute, CommandPaletteState, PaletteAction, Palet
 use crate::features::home::{
     HomeDashboardData, HomeLoadState, HomeMessage, MoodViewMode, view_home,
 };
+use crate::features::projects::{ProjectsMessage, ProjectsState, view_projects};
 
 /// Mensagens raiz do shell MVU do eStudy.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +31,8 @@ pub enum AppMessage {
     ToggleModulesMenu,
     /// Fecha menus e overlays abertos (`Escape`).
     CloseOverlays,
+    /// Alterna a barra contextual esquerda na tela ativa (`Ctrl+B`).
+    ToggleContextSidebar,
     /// Alterna o próximo preset de tema oficial.
     CycleThemePreset,
     /// Alterna entre modo claro e escuro.
@@ -38,6 +41,8 @@ pub enum AppMessage {
     Palette(PaletteMessage),
     /// Mensagem destinada à fatia Home.
     Home(HomeMessage),
+    /// Mensagem destinada à fatia Projetos.
+    Projects(ProjectsMessage),
 }
 
 /// Estado completo da interface do eStudy (testável sem janela nem GPU).
@@ -55,6 +60,8 @@ pub struct EstudyApp {
     pub modules_menu_open: bool,
     /// Estado da fatia Home.
     pub home_state: HomeLoadState,
+    /// Estado da fatia Projetos (Kanban, frameworks e Drawer da tarefa).
+    pub projects_state: ProjectsState,
     /// Mensagem de feedback transitório da ação mais recente.
     pub status_banner: Option<String>,
 }
@@ -63,6 +70,18 @@ impl EstudyApp {
     /// Inicializa o aplicativo com um relógio injetado e estado inicial da Home.
     #[must_use]
     pub fn new(clock: Arc<dyn ClockPort>, home_state: HomeLoadState) -> Self {
+        let now = clock.now_utc();
+        let projects_state = ProjectsState::sample(now.date_naive(), now);
+        Self::with_projects(clock, home_state, projects_state)
+    }
+
+    /// Inicializa o aplicativo com estado de Projetos carregado da persistência.
+    #[must_use]
+    pub fn with_projects(
+        clock: Arc<dyn ClockPort>,
+        home_state: HomeLoadState,
+        projects_state: ProjectsState,
+    ) -> Self {
         Self {
             clock,
             route: AppRoute::Home,
@@ -71,6 +90,7 @@ impl EstudyApp {
             notifications_open: false,
             modules_menu_open: false,
             home_state,
+            projects_state,
             status_banner: None,
         }
     }
@@ -120,6 +140,13 @@ impl EstudyApp {
                 self.palette.close();
                 self.notifications_open = false;
                 self.modules_menu_open = false;
+                self.projects_state.drawer = None;
+            }
+            AppMessage::ToggleContextSidebar => {
+                if self.route == AppRoute::Projects {
+                    self.projects_state
+                        .update(ProjectsMessage::ToggleSidebar, self.clock.now_utc());
+                }
             }
             AppMessage::CycleThemePreset => {
                 self.loadout.theme_preset = self.loadout.theme_preset.next();
@@ -129,6 +156,10 @@ impl EstudyApp {
             }
             AppMessage::Palette(msg) => self.handle_palette_message(msg),
             AppMessage::Home(msg) => self.handle_home_message(msg),
+            AppMessage::Projects(msg) => {
+                let now = self.clock.now_utc();
+                self.projects_state.update(msg, now);
+            }
         }
     }
 
@@ -389,6 +420,19 @@ impl EstudyApp {
                 AppMessage::Home,
                 AppMessage::Navigate,
             ),
+            AppRoute::Projects => {
+                let today_items = match &self.home_state {
+                    HomeLoadState::Ready(data) => data.today_items.as_slice(),
+                    _ => &[],
+                };
+                view_projects(
+                    &self.projects_state,
+                    self.clock.now_utc().date_naive(),
+                    today_items,
+                    theme,
+                    AppMessage::Projects,
+                )
+            }
             other => view_module_placeholder(other, theme),
         };
 
@@ -523,9 +567,13 @@ fn view_module_placeholder<'a>(route: AppRoute, theme: EstudyTheme) -> Element<'
 fn map_shortcut(key: &Key, modifiers: Modifiers) -> Option<AppMessage> {
     if modifiers.command()
         && let Key::Character(ch) = key
-        && ch.eq_ignore_ascii_case("k")
     {
-        return Some(AppMessage::Palette(PaletteMessage::Toggle));
+        if ch.eq_ignore_ascii_case("k") {
+            return Some(AppMessage::Palette(PaletteMessage::Toggle));
+        }
+        if ch.eq_ignore_ascii_case("b") {
+            return Some(AppMessage::ToggleContextSidebar);
+        }
     }
     if matches!(key, Key::Named(keyboard::key::Named::Escape)) {
         return Some(AppMessage::CloseOverlays);

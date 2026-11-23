@@ -43,4 +43,27 @@ pub enum DomainError {
     /// Falha ao derivar chave HMAC ou inicializar o algoritmo criptográfico.
     #[error("falha criptográfica interna: {0}")]
     CryptoFailure(String),
+
+    /// Limite máximo de itens na checklist da tarefa atingido (`0/20`).
+    #[error("a checklist da tarefa atingiu o limite máximo de {max} itens")]
+    ChecklistLimitReached {
+        /// Limite máximo permitido.
+        max: usize,
+    },
+
+    /// Limite máximo de tarefas fixadas em "Em foco" atingido (`5`).
+    #[error("o limite máximo de {max} itens em foco já foi atingido")]
+    FocusPinLimitReached {
+        /// Limite máximo permitido.
+        max: usize,
+    },
+
+    /// Texto inválido ao converter status, prioridade, framework ou quadrante.
+    #[error("valor inválido para {field}: {value}")]
+    InvalidProjectValue {
+        /// Campo avaliado.
+        field: &'static str,
+        /// Valor recebido.
+        value: String,
+    },
 }

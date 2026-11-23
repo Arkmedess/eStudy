@@ -16,3 +16,7 @@ pub use features::home::{
     MedalBadge, MoodDayEntry, MoodLevel, MoodViewMode, PinboardState, ProfileSummary,
     ProjectCardSummary, TodayItem,
 };
+pub use features::projects::{
+    CONTEXT_SIDEBAR_WIDTH, DescriptionTab, ProjectsMessage, ProjectsState, TaskDrawerState,
+    UpcomingEventItem,
+};

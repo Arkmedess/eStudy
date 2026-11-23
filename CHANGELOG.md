@@ -6,6 +6,11 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ## [Unreleased]
 
+### Adicionado
+- Regras de Projetos, Tarefas multi-projeto, Checklists (`0/20`), Marcos e Matriz de Eisenhower em `crates/estudy-domain`.
+- Repositório transacional `SqliteProjectRepository` em `crates/estudy-storage` com carregamento em lote sem consultas N+1, tags, checklists e soft delete.
+- Visão de Projetos em `crates/estudy-ui` com barra lateral esquerda contextual recolhível (`Ctrl+B` com mini-calendário mensal e resumo "Hoje"), faixa de próximos eventos, filtros por tag, Kanban 4 colunas, frameworks opcionais (*Marcos & Entregas*, *Matriz Eisenhower*, *Foco Semanal*) e Drawer lateral da tarefa (pin *Em foco* limitado a 5, múltiplos projetos, tags, datas/recorrência, checklist `0/20` e descrição Markdown `Escrever / Visualizar`).
+
 ---
 
 ## [0.1.1] - 2026-11-22

@@ -21,6 +21,16 @@ pub enum DomainEvent {
         /// Versão de destino aplicada.
         version: u32,
     },
+    /// Projeto criado ou atualizado após commit.
+    ProjectSaved {
+        /// Identificador do projeto.
+        project_id: EntityId,
+    },
+    /// Tarefa criada, movida ou atualizada após commit.
+    TaskSaved {
+        /// Identificador da tarefa.
+        task_id: EntityId,
+    },
 }
 
 /// Porta para publicação desacoplada de eventos após a confirmação da persistência.
