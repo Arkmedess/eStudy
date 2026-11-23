@@ -62,3 +62,12 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 - Camada de persistência `estudy-storage` com resolução XDG (`--data-dir` / `ESTUDY_DATA_DIR`), abertura de conexão SQLite em modo WAL (`cache_size = -4000`), executor transacional de migrações com `PRAGMA quick_check` e `PRAGMA foreign_key_check`, backup automático pré-migração (rotação de 5 arquivos) e exportação de snapshot limpo para nuvem.
 - Schema SQLite baseline v1 (`0001_initial_v1.sql`) com as 3 camadas de dados (usuário, economia/gamificação/auditoria e sistema/cache) e busca `notes_fts` (`FTS5`) sincronizada via triggers.
 - Documentação fundacional: `README.md`, `DESIGN.md`, `ROADMAP.md`, diagramas C4 e ADRs `0001` a `0003`.
+
+---
+
+[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Arkmedess/eStudy/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/Arkmedess/eStudy/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/Arkmedess/eStudy/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/Arkmedess/eStudy/compare/v0.0.1...v0.1.0
+[0.0.1]: https://github.com/Arkmedess/eStudy/releases/tag/v0.0.1

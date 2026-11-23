@@ -18,7 +18,7 @@ Plano incremental de entregas do **eStudy**. Cada marco entrega um conjunto func
   - Visão de projeto com Kanban de 4 colunas (`Backlog`, `A fazer`, `Em andamento`, `Concluído`).
   - Gaveta lateral da tarefa com checklist `0/20`, descrição Markdown (`Escrever/Visualizar`), pin *Em foco* e visões opcionais (*Marcos*, *Eisenhower*, *Foco Semanal*).
 
-- **v0.3.0 — Timeline "Hoje", Calendário Unificado e `Ctrl+K` Completo**
+- **v0.3.0 — Timeline "Hoje", Calendário Unificado e `Ctrl+K` Completo** *(Concluído)*
   - Calendário (`Ano / Mês / Semana / Dia`) unificando eventos recorrentes/multi-dia e tarefas com prazo.
   - Gaveta "Hoje" com cálculo automático de janelas livres, linha *Agora* em tempo real e busca global via `FTS5` + ações rápidas no `Ctrl+K`.
 
