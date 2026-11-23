@@ -8,6 +8,23 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
+## [0.3.0] - 2026-11-23
+
+### Adicionado
+- Modelo e regras de Calendário Unificado (`CalendarEvent`, recorrência diária/semanal/mensal, eventos multi-dia, prazos de tarefas e cálculo de janelas livres da Timeline "Hoje") em `crates/estudy-domain`.
+- Repositórios `SqliteCalendarRepository` e `SqliteSearchRepository` (busca global unificada combinando `notes_fts` via `FTS5` e entidades ativas) em `crates/estudy-storage`.
+- Tela de Calendário Unificado (`Ano / Mês / Semana / Dia`) com barra contextual recolhível (`Ctrl+B`), criação rápida de eventos e filtros por projeto/tag, além do Drawer deslizante "Hoje" (seção *Sem horário*, blocos proporcionais, janelas livres `Livre · XhYY` e linha *Agora*).
+- Barra de Comando (`Ctrl+K`) completa com busca dinâmica em projetos, tarefas, eventos e notas `FTS5`, além de criação direta via `> nova tarefa <título>`, `> novo evento <título>` e `> focar <N>m`.
+
+### Otimizado e Adicionado (Qualidade, Performance & DevOps)
+- Backend `tiny-skia` adotado como padrão no `Iced` (reduzindo o RSS em repouso para ~31 MiB; aceleração GPU `wgpu` disponível via `--features gpu` em `estudy-desktop`), além de `[profile.release]` com `lto = "thin"` e `strip = "symbols"`.
+- Cache estático dos 87 handles SVG em `estudy-ui-kit` (coloração via `svg::Style`, zero alocações por frame) e `canvas::Cache` no `HeatmapGrid`.
+- Rastreamento seletivo de alterações (*dirty tracking*) em `ProjectsState` e `CalendarState` (zero escritas SQLite durante digitação), cache de entradas ao abrir o `Ctrl+K` e consulta `FTS5` apenas para termos com `>= 2` caracteres.
+- Logging estruturado em JSON via `tracing` + `tracing-subscriber` + `tracing-appender` com rotação diária em `cache_dir/logs/` e sem dados sensíveis.
+- Script padrão de validação e benchmark [scripts/bench_and_validate.sh](file:///home/arthur/Development/eStudy/scripts/bench_and_validate.sh) e pipeline CI em `.github/workflows/ci.yml`.
+
+---
+
 ## [0.2.0] - 2026-11-22
 
 ### Adicionado
