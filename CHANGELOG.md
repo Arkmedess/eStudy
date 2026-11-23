@@ -6,6 +6,10 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ## [Unreleased]
 
+---
+
+## [0.1.0] - 2026-11-22
+
 ### Adicionado
 - Design System `crates/estudy-ui-kit` em `Iced` (`0.14.0`) com os 5 presets oficiais (*Oliva Orgânico, eStudy Menta, Cyber Minimalist, Solar Amber, Velvet Sakura*) em Light/Dark validados em contraste WCAG 2.2 AA (`>= 4.5:1`), catálogo de 87 ícones SVG, 7 molduras de quadro e `HeatmapGrid` anual (365 dias) em `Canvas`.
 - Shell MVU `crates/estudy-ui` com Barra Superior (`48px`), Barra de Comando (`Ctrl+K`) e fatia Home em 3 colunas (Perfil + "Hoje", Heatmap 365d + Grade de Projetos em 2 colunas, "Em foco" `X/5` + Diário de Humor + Quadro Personalizável) cobrindo estados Loading, Empty, Error e Ready.

@@ -10,7 +10,7 @@ Plano incremental de entregas do **eStudy**. Cada marco entrega um conjunto func
   - Resolução XDG de diretórios (`--data-dir` / `ESTUDY_DATA_DIR`), SQLite em modo WAL com teto de cache de 4 MB, backup automático antes de migrações, exportação de snapshot limpo para nuvem e schema v1 completo com `FTS5`.
   - Documentação base (`README.md`, `DESIGN.md`, `ROADMAP.md`, `CHANGELOG.md`, diagramas C4 e ADRs).
 
-- **v0.1.0 — UI Kit (`Iced`), 5 Presets WCAG AA, Catálogo SVG e Home Pessoal**
+- **v0.1.0 — UI Kit (`Iced`), 5 Presets WCAG AA, Catálogo SVG e Home Pessoal** *(Concluído)*
   - `crates/estudy-ui-kit` com os 5 presets (incluindo *Oliva Orgânico*), 87 ícones Lucide SVG e `apps/estudy-preview` para testar componentes isolados.
   - Home em 3 colunas (Perfil + "Hoje", Mapa de calor 365 dias + Projetos, Em Foco + Diário de Humor + Quadro personalizável) e estrutura inicial da Barra de Comando (`Ctrl+K`).
 
