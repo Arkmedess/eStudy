@@ -68,6 +68,12 @@ pub fn apply_migrations(
     verify_database_integrity(conn)?;
 
     let final_version = read_current_version(conn)?;
+    tracing::info!(
+        target: "estudy.storage",
+        current_version = final_version,
+        applied_count = applied_versions.len(),
+        "migrações aplicadas e integridade verificada"
+    );
     Ok(MigrationReport {
         applied_versions,
         current_version: final_version,

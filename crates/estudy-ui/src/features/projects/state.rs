@@ -70,6 +70,9 @@ pub struct ProjectsState {
     pub weekly_focus_ids: BTreeSet<EntityId>,
     /// Drawer lateral direito aberto, se houver uma tarefa em edição.
     pub drawer: Option<TaskDrawerState>,
+    dirty_project_ids: BTreeSet<EntityId>,
+    dirty_task_ids: BTreeSet<EntityId>,
+    deferred_task_ids: BTreeSet<EntityId>,
 }
 
 /// Mensagens da fatia Projetos.
@@ -197,6 +200,35 @@ impl ProjectsState {
             quick_task_title: String::new(),
             weekly_focus_ids,
             drawer: None,
+            dirty_project_ids: BTreeSet::new(),
+            dirty_task_ids: BTreeSet::new(),
+            deferred_task_ids: BTreeSet::new(),
+        }
+    }
+
+    /// Promove edições em rascunho no Drawer para gravação pendente (chamado ao fechar/sair).
+    pub fn flush_deferred(&mut self) {
+        self.dirty_task_ids.append(&mut self.deferred_task_ids);
+    }
+
+    /// Extrai e limpa os IDs de projetos e tarefas que precisam ser persistidos.
+    pub fn take_dirty(&mut self) -> (Vec<EntityId>, Vec<EntityId>) {
+        let projects = std::mem::take(&mut self.dirty_project_ids)
+            .into_iter()
+            .collect();
+        let tasks = std::mem::take(&mut self.dirty_task_ids)
+            .into_iter()
+            .collect();
+        (projects, tasks)
+    }
+
+    /// Marca os projetos e tarefas atuais como pendentes para gravação inicial (seed).
+    pub fn mark_all_dirty(&mut self) {
+        for proj in &self.projects {
+            self.dirty_project_ids.insert(proj.id.clone());
+        }
+        for task in &self.tasks {
+            self.dirty_task_ids.insert(task.id.clone());
         }
     }
 
@@ -275,6 +307,8 @@ impl ProjectsState {
             ProjectsMessage::SetTaskQuadrant(id, quadrant) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == id) {
                     task.eisenhower_quadrant = Some(quadrant);
+                    task.updated_at = now_utc;
+                    self.dirty_task_ids.insert(id);
                 }
             }
             ProjectsMessage::ToggleWeeklyFocus(id) => {
@@ -283,6 +317,7 @@ impl ProjectsState {
                 }
             }
             ProjectsMessage::OpenTaskDrawer(task_id) => {
+                self.flush_deferred();
                 self.drawer = Some(TaskDrawerState {
                     task_id,
                     description_tab: DescriptionTab::Write,
@@ -291,8 +326,11 @@ impl ProjectsState {
                     notice: None,
                 });
             }
-            ProjectsMessage::CloseTaskDrawer => self.drawer = None,
-            other => self.update_drawer(other),
+            ProjectsMessage::CloseTaskDrawer => {
+                self.flush_deferred();
+                self.drawer = None;
+            }
+            other => self.update_drawer(other, now_utc),
         }
     }
 
@@ -301,6 +339,7 @@ impl ProjectsState {
             && let Some(project) = self.projects.iter_mut().find(|proj| proj.id == target_id)
         {
             project.framework = framework;
+            self.dirty_project_ids.insert(target_id);
         }
     }
 
@@ -328,8 +367,9 @@ impl ProjectsState {
             })
             .unwrap_or_default();
 
+        let id = EntityId::new_v7();
         self.tasks.push(Task {
-            id: EntityId::new_v7(),
+            id: id.clone(),
             title,
             description_md: String::new(),
             status: TaskStatus::Todo,
@@ -347,16 +387,18 @@ impl ProjectsState {
             created_at: now_utc,
             updated_at: now_utc,
         });
+        self.dirty_task_ids.insert(id);
         self.quick_task_title.clear();
     }
 
     fn move_task_status(&mut self, task_id: &EntityId, status: TaskStatus) {
         if let Some(task) = self.tasks.iter_mut().find(|task| task.id == *task_id) {
             task.status = status;
+            self.dirty_task_ids.insert(task_id.clone());
         }
     }
 
-    fn update_drawer(&mut self, message: ProjectsMessage) {
+    fn update_drawer(&mut self, message: ProjectsMessage, now_utc: chrono::DateTime<chrono::Utc>) {
         let Some(drawer) = &mut self.drawer else {
             return;
         };
@@ -371,31 +413,43 @@ impl ProjectsState {
             ProjectsMessage::DrawerTitleChanged(title) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == target_id) {
                     task.title = title;
+                    task.updated_at = now_utc;
+                    self.deferred_task_ids.insert(target_id);
                 }
             }
             ProjectsMessage::DrawerDescriptionChanged(desc) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == target_id) {
                     task.description_md = desc;
+                    task.updated_at = now_utc;
+                    self.deferred_task_ids.insert(target_id);
                 }
             }
             ProjectsMessage::DrawerStartAtChanged(val) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == target_id) {
                     task.start_at = (!val.trim().is_empty()).then_some(val);
+                    task.updated_at = now_utc;
+                    self.deferred_task_ids.insert(target_id);
                 }
             }
             ProjectsMessage::DrawerDueAtChanged(val) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == target_id) {
                     task.due_at = (!val.trim().is_empty()).then_some(val);
+                    task.updated_at = now_utc;
+                    self.deferred_task_ids.insert(target_id);
                 }
             }
             ProjectsMessage::DrawerRecurrenceChanged(rec) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == target_id) {
                     task.recurrence = rec;
+                    task.updated_at = now_utc;
+                    self.dirty_task_ids.insert(target_id);
                 }
             }
             ProjectsMessage::DrawerPriorityChanged(priority) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == target_id) {
                     task.priority = priority;
+                    task.updated_at = now_utc;
+                    self.dirty_task_ids.insert(target_id);
                 }
             }
             ProjectsMessage::DrawerToggleFocusPin => self.toggle_drawer_focus_pin(&target_id),
@@ -409,12 +463,16 @@ impl ProjectsState {
             ProjectsMessage::DrawerRemoveChecklistItem(item_id) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == target_id) {
                     task.checklist.retain(|item| item.id != item_id);
+                    task.updated_at = now_utc;
+                    self.dirty_task_ids.insert(target_id);
                 }
             }
             ProjectsMessage::DrawerAddTag => self.add_drawer_tag(&target_id),
             ProjectsMessage::DrawerRemoveTag(tag) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == target_id) {
                     task.tags.retain(|item| item != &tag);
+                    task.updated_at = now_utc;
+                    self.dirty_task_ids.insert(target_id);
                 }
             }
             _ => {}
@@ -431,6 +489,7 @@ impl ProjectsState {
         match validate_focus_pin_budget(pinned_count, next_pin, task.pinned_focus) {
             Ok(()) => {
                 task.pinned_focus = next_pin;
+                self.dirty_task_ids.insert(task_id.clone());
                 if let Some(drawer) = &mut self.drawer {
                     drawer.notice = None;
                 }
@@ -461,6 +520,7 @@ impl ProjectsState {
                 milestone_name: None,
             });
         }
+        self.dirty_task_ids.insert(task_id.clone());
     }
 
     fn add_drawer_checklist_item(&mut self, task_id: &EntityId) {
@@ -480,6 +540,7 @@ impl ProjectsState {
             Ok(()) => {
                 drawer.new_checklist_title.clear();
                 drawer.notice = None;
+                self.dirty_task_ids.insert(task_id.clone());
             }
             Err(_) => {
                 drawer.notice = Some(format!(
@@ -494,6 +555,7 @@ impl ProjectsState {
             && let Some(item) = task.checklist.iter_mut().find(|item| item.id == *item_id)
         {
             item.done = !item.done;
+            self.dirty_task_ids.insert(task_id.clone());
         }
     }
 
@@ -512,6 +574,7 @@ impl ProjectsState {
                 .any(|existing| existing.eq_ignore_ascii_case(&tag))
         {
             task.tags.push(tag);
+            self.dirty_task_ids.insert(task_id.clone());
         }
         drawer.new_tag_name.clear();
     }

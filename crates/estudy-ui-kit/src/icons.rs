@@ -1,6 +1,15 @@
 //! Catálogo único de 87 ícones vetoriais SVG (estilo Lucide, zero emojis).
 
 use iced::Color;
+use iced::widget::svg;
+use std::sync::LazyLock;
+
+static CACHED_SVG_HANDLES: LazyLock<Vec<svg::Handle>> = LazyLock::new(|| {
+    Icon::ALL
+        .iter()
+        .map(|icon| svg::Handle::from_memory(icon.to_svg_string(Color::WHITE).into_bytes()))
+        .collect()
+});
 
 /// Catálogo completo dos 87 ícones usados no eStudy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -731,6 +740,16 @@ impl Icon {
         format!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{hex}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{geometry}</svg>"#
         )
+    }
+
+    /// Retorna o handle SVG pré-carregado em memória estática (zero alocação por frame).
+    #[must_use]
+    pub fn cached_handle(self) -> svg::Handle {
+        let idx = Self::ALL
+            .iter()
+            .position(|candidate| *candidate == self)
+            .unwrap_or(0);
+        CACHED_SVG_HANDLES[idx].clone()
     }
 
     fn spec(self) -> &'static IconSpec {

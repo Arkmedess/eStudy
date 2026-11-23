@@ -58,6 +58,7 @@ fn should_provide_87_unique_valid_svg_icons_without_emojis() {
             svg.contains("viewBox=\"0 0 24 24\""),
             "viewBox ausente no ícone {name}"
         );
+        let _cached = icon.cached_handle();
     }
 }
 

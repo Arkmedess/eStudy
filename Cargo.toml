@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT"
@@ -22,17 +22,25 @@ chrono = { version = "0.4.45", features = ["serde"] }
 directories = "6.0.0"
 hex = "0.4.3"
 hmac = "0.13.0"
-iced = { version = "0.14.0", features = ["svg", "canvas", "tokio"] }
+iced = { version = "0.14.0", default-features = false, features = ["tiny-skia", "crisp", "x11", "wayland", "thread-pool", "svg", "canvas", "tokio", "linux-theme-detection", "web-colors"] }
 rusqlite = { version = "0.43.0", features = ["bundled", "backup"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.11.1"
 tempfile = "3"
 thiserror = "2.0.21"
+tracing = "0.1.44"
+tracing-appender = "0.2.5"
+tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter", "json"] }
 uuid = { version = "1.29.3", features = ["v7", "serde"] }
 
 [profile.dev]
 debug = "line-tables-only"
+
+[profile.release]
+lto = "thin"
+strip = "symbols"
+codegen-units = 1
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

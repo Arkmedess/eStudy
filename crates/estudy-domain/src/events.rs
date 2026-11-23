@@ -31,6 +31,11 @@ pub enum DomainEvent {
         /// Identificador da tarefa.
         task_id: EntityId,
     },
+    /// Evento de calendário criado ou atualizado após commit.
+    CalendarEventSaved {
+        /// Identificador do evento.
+        event_id: EntityId,
+    },
 }
 
 /// Porta para publicação desacoplada de eventos após a confirmação da persistência.

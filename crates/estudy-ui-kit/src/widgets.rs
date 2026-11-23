@@ -6,13 +6,13 @@ use iced::{Alignment, Border, Color, Element, Length};
 use crate::icons::Icon;
 use crate::theme::{EstudyTheme, RADIUS_CHIP, SPACE_2, SPACE_3, SPACE_4};
 
-/// Renderiza um ícone SVG do catálogo no tamanho e cor informados.
+/// Renderiza um ícone SVG do catálogo no tamanho e cor informados usando cache estático.
 #[must_use]
 pub fn icon_svg<'a, Message: 'a>(icon: Icon, size: f32, color: Color) -> Element<'a, Message> {
-    let bytes = icon.to_svg_string(color).into_bytes();
-    svg(svg::Handle::from_memory(bytes))
+    svg(icon.cached_handle())
         .width(Length::Fixed(size))
         .height(Length::Fixed(size))
+        .style(move |_, _| svg::Style { color: Some(color) })
         .into()
 }
 

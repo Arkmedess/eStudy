@@ -272,8 +272,12 @@ fn view_today_card<'a, Message: Clone + 'a>(
     }
 
     let shortcuts = row![
+        button(text("Timeline").size(12).color(theme.on_accent))
+            .on_press(map_home(HomeMessage::OpenTodayTimeline))
+            .padding([SPACE_1, SPACE_3])
+            .style(move |_, status| theme.primary_button_style(status)),
         button(text("Semana").size(12).color(theme.text_primary))
-            .on_press(map_route(AppRoute::Calendar))
+            .on_press(map_home(HomeMessage::OpenCalendarWeek))
             .padding([SPACE_1, SPACE_3])
             .style(move |_, status| theme.ghost_button_style(status)),
         button(text("Calendário").size(12).color(theme.text_primary))

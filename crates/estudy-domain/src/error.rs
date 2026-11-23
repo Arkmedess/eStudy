@@ -66,4 +66,15 @@ pub enum DomainError {
         /// Valor recebido.
         value: String,
     },
+
+    /// Intervalo de datas ou horários inválido em um evento de calendário.
+    #[error(
+        "intervalo inválido no evento: início ({starts_at}) deve ser anterior ou igual ao fim ({ends_at})"
+    )]
+    InvalidEventTimeRange {
+        /// Início informado.
+        starts_at: String,
+        /// Fim informado.
+        ends_at: String,
+    },
 }

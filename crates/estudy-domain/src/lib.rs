@@ -4,6 +4,7 @@
 //! Concentra identificadores ordenáveis (`EntityId`), abstração de relógio (`ClockPort`),
 //! barramento de eventos (`EventBusPort`) e a cadeia criptográfica do razão da carteira.
 
+pub mod calendar;
 pub mod clock;
 pub mod error;
 pub mod events;
@@ -11,6 +12,10 @@ pub mod ids;
 pub mod projects;
 pub mod wallet;
 
+pub use calendar::{
+    CalendarEvent, CalendarOccurrence, CalendarViewMode, RecurrenceRule, TimelineSlot,
+    TodayTimeline, build_today_timeline, expand_calendar_items, format_free_window_label,
+};
 pub use clock::{ClockPort, FixedClock, SystemClock};
 pub use error::DomainError;
 pub use events::{DomainEvent, EventBusPort, InMemoryEventBus};

@@ -1,7 +1,7 @@
 //! Shell principal do aplicativo **eStudy** (MVU puro desacoplado de janela).
 
 use chrono::Timelike;
-use estudy_domain::ClockPort;
+use estudy_domain::{CalendarViewMode, ClockPort};
 use estudy_ui_kit::widgets::{card, icon_svg, section_header};
 use estudy_ui_kit::{
     CosmeticLoadout, EstudyTheme, Icon, SPACE_2, SPACE_3, SPACE_4, SPACE_6, TOPBAR_HEIGHT,
@@ -12,7 +12,10 @@ use iced::widget::{button, column, container, row, stack, text};
 use iced::{Alignment, Element, Length, Subscription};
 use std::sync::Arc;
 
-use crate::command_palette::{AppRoute, CommandPaletteState, PaletteAction, PaletteMessage};
+use crate::command_palette::{
+    AppRoute, CommandPaletteState, PaletteAction, PaletteCommand, PaletteMessage,
+};
+use crate::features::calendar::{CalendarMessage, CalendarState, view_calendar, view_today_drawer};
 use crate::features::home::{
     HomeDashboardData, HomeLoadState, HomeMessage, MoodViewMode, view_home,
 };
@@ -43,6 +46,8 @@ pub enum AppMessage {
     Home(HomeMessage),
     /// Mensagem destinada à fatia Projetos.
     Projects(ProjectsMessage),
+    /// Mensagem destinada à fatia Calendário e Drawer "Hoje".
+    Calendar(CalendarMessage),
 }
 
 /// Estado completo da interface do eStudy (testável sem janela nem GPU).
@@ -62,6 +67,8 @@ pub struct EstudyApp {
     pub home_state: HomeLoadState,
     /// Estado da fatia Projetos (Kanban, frameworks e Drawer da tarefa).
     pub projects_state: ProjectsState,
+    /// Estado da fatia Calendário Unificado e Drawer "Hoje".
+    pub calendar_state: CalendarState,
     /// Mensagem de feedback transitório da ação mais recente.
     pub status_banner: Option<String>,
 }
@@ -72,7 +79,8 @@ impl EstudyApp {
     pub fn new(clock: Arc<dyn ClockPort>, home_state: HomeLoadState) -> Self {
         let now = clock.now_utc();
         let projects_state = ProjectsState::sample(now.date_naive(), now);
-        Self::with_projects(clock, home_state, projects_state)
+        let calendar_state = CalendarState::sample(now.date_naive(), now, &projects_state.projects);
+        Self::with_state(clock, home_state, projects_state, calendar_state)
     }
 
     /// Inicializa o aplicativo com estado de Projetos carregado da persistência.
@@ -81,6 +89,19 @@ impl EstudyApp {
         clock: Arc<dyn ClockPort>,
         home_state: HomeLoadState,
         projects_state: ProjectsState,
+    ) -> Self {
+        let now = clock.now_utc();
+        let calendar_state = CalendarState::sample(now.date_naive(), now, &projects_state.projects);
+        Self::with_state(clock, home_state, projects_state, calendar_state)
+    }
+
+    /// Inicializa o aplicativo com Projetos e Calendário carregados da persistência.
+    #[must_use]
+    pub fn with_state(
+        clock: Arc<dyn ClockPort>,
+        home_state: HomeLoadState,
+        projects_state: ProjectsState,
+        calendar_state: CalendarState,
     ) -> Self {
         Self {
             clock,
@@ -91,6 +112,7 @@ impl EstudyApp {
             modules_menu_open: false,
             home_state,
             projects_state,
+            calendar_state,
             status_banner: None,
         }
     }
@@ -118,6 +140,7 @@ impl EstudyApp {
     pub fn update(&mut self, message: AppMessage) {
         match message {
             AppMessage::Navigate(route) => {
+                self.projects_state.flush_deferred();
                 self.route = route;
                 self.palette.close();
                 self.notifications_open = false;
@@ -140,14 +163,19 @@ impl EstudyApp {
                 self.palette.close();
                 self.notifications_open = false;
                 self.modules_menu_open = false;
+                self.projects_state.flush_deferred();
                 self.projects_state.drawer = None;
+                self.calendar_state.today_drawer_open = false;
             }
-            AppMessage::ToggleContextSidebar => {
-                if self.route == AppRoute::Projects {
-                    self.projects_state
-                        .update(ProjectsMessage::ToggleSidebar, self.clock.now_utc());
-                }
-            }
+            AppMessage::ToggleContextSidebar => match self.route {
+                AppRoute::Projects => self
+                    .projects_state
+                    .update(ProjectsMessage::ToggleSidebar, self.clock.now_utc()),
+                AppRoute::Calendar => self
+                    .calendar_state
+                    .update(CalendarMessage::ToggleSidebar, self.clock.now_utc()),
+                _ => {}
+            },
             AppMessage::CycleThemePreset => {
                 self.loadout.theme_preset = self.loadout.theme_preset.next();
             }
@@ -159,6 +187,10 @@ impl EstudyApp {
             AppMessage::Projects(msg) => {
                 let now = self.clock.now_utc();
                 self.projects_state.update(msg, now);
+            }
+            AppMessage::Calendar(msg) => {
+                let now = self.clock.now_utc();
+                self.calendar_state.update(msg, now);
             }
         }
     }
@@ -193,6 +225,18 @@ impl EstudyApp {
 
         if self.palette.is_open {
             stack![shell, self.palette.view(theme, AppMessage::Palette)].into()
+        } else if self.calendar_state.today_drawer_open {
+            stack![
+                shell,
+                view_today_drawer(
+                    &self.calendar_state.events,
+                    &self.projects_state.tasks,
+                    self.clock.now_utc(),
+                    theme,
+                    AppMessage::Calendar,
+                )
+            ]
+            .into()
         } else if self.notifications_open {
             stack![shell, view_notifications_popover(theme)].into()
         } else if self.modules_menu_open {
@@ -204,9 +248,19 @@ impl EstudyApp {
 
     fn handle_palette_message(&mut self, message: PaletteMessage) {
         match message {
-            PaletteMessage::Toggle => self.palette.toggle(),
+            PaletteMessage::Toggle => {
+                if !self.palette.is_open {
+                    self.refresh_palette_search_entries();
+                }
+                self.palette.toggle();
+            }
             PaletteMessage::Close => self.palette.close(),
-            PaletteMessage::QueryChanged(query) => self.palette.set_query(query),
+            PaletteMessage::QueryChanged(query) => {
+                if self.palette.search_entries.is_empty() {
+                    self.refresh_palette_search_entries();
+                }
+                self.palette.set_query(query);
+            }
             PaletteMessage::SelectPrev => self.palette.select_prev(),
             PaletteMessage::SelectNext => self.palette.select_next(),
             PaletteMessage::ExecuteSelected => {
@@ -222,10 +276,59 @@ impl EstudyApp {
         }
     }
 
+    fn refresh_palette_search_entries(&mut self) {
+        let mut entries = Vec::new();
+        for proj in &self.projects_state.projects {
+            entries.push(PaletteCommand {
+                id: format!("proj:{}", proj.id),
+                label: proj.title.clone(),
+                hint: format!("Projeto · {}", proj.status.label()),
+                shortcut: None,
+                icon: Icon::FolderKanban,
+                action: PaletteAction::OpenProject(proj.id.clone()),
+            });
+        }
+        for task in &self.projects_state.tasks {
+            entries.push(PaletteCommand {
+                id: format!("task:{}", task.id),
+                label: task.title.clone(),
+                hint: format!("Tarefa · {}", task.status.label()),
+                shortcut: None,
+                icon: Icon::CheckSquare,
+                action: PaletteAction::OpenTask(task.id.clone()),
+            });
+        }
+        for event in &self.calendar_state.events {
+            entries.push(PaletteCommand {
+                id: format!("event:{}", event.id),
+                label: event.title.clone(),
+                hint: format!("Evento · {}", event.starts_at.format("%d/%m %H:%M")),
+                shortcut: None,
+                icon: Icon::Calendar,
+                action: PaletteAction::Navigate(AppRoute::Calendar),
+            });
+        }
+        self.palette.set_search_entries(entries);
+    }
+
     fn execute_palette_action(&mut self, action: PaletteAction) {
         self.palette.close();
+        let now = self.clock.now_utc();
         match action {
             PaletteAction::Navigate(route) => self.route = route,
+            PaletteAction::OpenTodayTimeline => {
+                self.calendar_state.today_drawer_open = true;
+            }
+            PaletteAction::OpenProject(project_id) => {
+                self.route = AppRoute::Projects;
+                self.projects_state
+                    .update(ProjectsMessage::SelectProject(Some(project_id)), now);
+            }
+            PaletteAction::OpenTask(task_id) => {
+                self.route = AppRoute::Projects;
+                self.projects_state
+                    .update(ProjectsMessage::OpenTaskDrawer(task_id), now);
+            }
             PaletteAction::CycleThemePreset => {
                 self.loadout.theme_preset = self.loadout.theme_preset.next();
             }
@@ -235,13 +338,27 @@ impl EstudyApp {
             PaletteAction::StartFocus(minutes) => {
                 self.status_banner = Some(format!("Bloco de foco de {minutes} min preparado."));
             }
-            PaletteAction::QuickCreateTask => {
+            PaletteAction::QuickCreateTask(Some(title)) => {
+                self.route = AppRoute::Projects;
+                self.projects_state
+                    .update(ProjectsMessage::QuickTaskTitleChanged(title.clone()), now);
+                self.projects_state
+                    .update(ProjectsMessage::CreateQuickTask, now);
+                self.status_banner = Some(format!("Tarefa '{title}' criada."));
+            }
+            PaletteAction::QuickCreateTask(None) => {
                 self.route = AppRoute::Projects;
                 self.status_banner = Some("Criação rápida de tarefa pronta.".to_string());
             }
-            PaletteAction::QuickCreateEvent => {
+            PaletteAction::QuickCreateEvent(Some(title)) => {
                 self.route = AppRoute::Calendar;
-                self.status_banner = Some("Calendário aberto para novo evento.".to_string());
+                self.calendar_state.quick_add_event(&title, now);
+                self.status_banner = Some(format!("Evento '{title}' criado no calendário."));
+            }
+            PaletteAction::QuickCreateEvent(None) => {
+                self.route = AppRoute::Calendar;
+                self.calendar_state.create_draft.open = true;
+                self.status_banner = Some("Formulário de novo evento aberto.".to_string());
             }
             PaletteAction::LogMoodQuick => {
                 self.route = AppRoute::Home;
@@ -289,6 +406,13 @@ impl EstudyApp {
                 {
                     item.done = !item.done;
                 }
+            }
+            HomeMessage::OpenTodayTimeline => {
+                self.calendar_state.today_drawer_open = true;
+            }
+            HomeMessage::OpenCalendarWeek => {
+                self.route = AppRoute::Calendar;
+                self.calendar_state.view_mode = CalendarViewMode::Week;
             }
             HomeMessage::StartFocusForPin(pin_id) => {
                 self.status_banner = Some(format!("Foco vinculado ao item {pin_id}."));
@@ -433,6 +557,14 @@ impl EstudyApp {
                     AppMessage::Projects,
                 )
             }
+            AppRoute::Calendar => view_calendar(
+                &self.calendar_state,
+                &self.projects_state.projects,
+                &self.projects_state.tasks,
+                self.clock.now_utc().date_naive(),
+                theme,
+                AppMessage::Calendar,
+            ),
             other => view_module_placeholder(other, theme),
         };
 

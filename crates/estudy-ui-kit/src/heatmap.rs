@@ -1,9 +1,10 @@
-//! Heatmap anual de constância (365 dias) renderizado em `Canvas` vetorial.
+//! Heatmap anual de constância (365 dias) renderizado em `Canvas` vetorial com cache.
 
 use iced::widget::canvas;
 use iced::{Color, Point, Rectangle, Renderer, Size, Theme, mouse};
+use std::cell::Cell;
 
-use crate::theme::EstudyTheme;
+use crate::theme::{EstudyTheme, ThemeMode, ThemePreset};
 
 /// Dados de atividade dos últimos 365 dias usados pelo heatmap.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +39,13 @@ impl HeatmapData {
     }
 }
 
+/// Estado interno de cache de geometria do `HeatmapGrid`.
+#[derive(Default)]
+pub struct HeatmapCanvasState {
+    cache: canvas::Cache,
+    last_signature: Cell<Option<(u64, ThemePreset, ThemeMode)>>,
+}
+
 /// Programa `Canvas` que desenha a grade anual de constância em 53 semanas × 7 dias.
 #[derive(Debug, Clone)]
 pub struct HeatmapGrid<'a> {
@@ -48,40 +56,51 @@ pub struct HeatmapGrid<'a> {
 }
 
 impl<Message> canvas::Program<Message> for HeatmapGrid<'_> {
-    type State = ();
+    type State = HeatmapCanvasState;
 
     fn draw(
         &self,
-        _state: &Self::State,
+        state: &Self::State,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let cols = 53_usize;
-        let rows = 7_usize;
-        let gap = 3.0_f32;
-
-        #[allow(clippy::cast_precision_loss)]
-        let cell_w = ((bounds.width - gap * (cols as f32 - 1.0)) / cols as f32).max(4.0);
-        #[allow(clippy::cast_precision_loss)]
-        let cell_h = ((bounds.height - gap * (rows as f32 - 1.0)) / rows as f32).max(4.0);
-        let cell_size = cell_w.min(cell_h).min(12.0);
-
-        for (day_idx, &count) in self.data.days.iter().enumerate() {
-            let col = day_idx / rows;
-            let row = day_idx % rows;
-            #[allow(clippy::cast_precision_loss)]
-            let x = col as f32 * (cell_size + gap);
-            #[allow(clippy::cast_precision_loss)]
-            let y = row as f32 * (cell_size + gap);
-
-            let color = level_color(self.theme, HeatmapData::intensity_level(count));
-            frame.fill_rectangle(Point::new(x, y), Size::new(cell_size, cell_size), color);
+        let signature = (
+            hash_days(&self.data.days),
+            self.theme.preset,
+            self.theme.mode,
+        );
+        if state.last_signature.get() != Some(signature) {
+            state.cache.clear();
+            state.last_signature.set(Some(signature));
         }
 
-        vec![frame.into_geometry()]
+        let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
+            let cols = 53_usize;
+            let rows = 7_usize;
+            let gap = 3.0_f32;
+
+            #[allow(clippy::cast_precision_loss)]
+            let cell_w = ((bounds.width - gap * (cols as f32 - 1.0)) / cols as f32).max(4.0);
+            #[allow(clippy::cast_precision_loss)]
+            let cell_h = ((bounds.height - gap * (rows as f32 - 1.0)) / rows as f32).max(4.0);
+            let cell_size = cell_w.min(cell_h).min(12.0);
+
+            for (day_idx, &count) in self.data.days.iter().enumerate() {
+                let col = day_idx / rows;
+                let row = day_idx % rows;
+                #[allow(clippy::cast_precision_loss)]
+                let x = col as f32 * (cell_size + gap);
+                #[allow(clippy::cast_precision_loss)]
+                let y = row as f32 * (cell_size + gap);
+
+                let color = level_color(self.theme, HeatmapData::intensity_level(count));
+                frame.fill_rectangle(Point::new(x, y), Size::new(cell_size, cell_size), color);
+            }
+        });
+
+        vec![geometry]
     }
 }
 
@@ -102,4 +121,13 @@ fn level_color(theme: EstudyTheme, level: u8) -> Color {
         },
         _ => theme.accent,
     }
+}
+
+fn hash_days(days: &[u16; 365]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for &count in days {
+        hash ^= u64::from(count);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    hash
 }

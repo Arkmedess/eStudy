@@ -12,6 +12,7 @@ chrono.workspace = true
 estudy-domain = { path = "../estudy-domain" }
 estudy-ui-kit = { path = "../estudy-ui-kit" }
 iced.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

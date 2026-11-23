@@ -11,6 +11,7 @@ pub use app::{AppMessage, EstudyApp};
 pub use command_palette::{
     AppRoute, CommandPaletteState, PaletteAction, PaletteCommand, PaletteMessage,
 };
+pub use features::calendar::{CalendarMessage, CalendarState};
 pub use features::home::{
     FocusPinItem, HomeDashboardData, HomeLoadState, HomeMessage, MAX_FOCUS_PINS, MAX_PINNED_MEDALS,
     MedalBadge, MoodDayEntry, MoodLevel, MoodViewMode, PinboardState, ProfileSummary,

@@ -189,6 +189,10 @@ pub enum HomeMessage {
     SelectBoardFrame(BoardFrameStyle),
     /// Alterna conclusão de um item do cartão "Hoje".
     ToggleTodayItem(usize),
+    /// Abre o Drawer da Timeline Vertical "Hoje".
+    OpenTodayTimeline,
+    /// Abre o Calendário diretamente na visão semanal.
+    OpenCalendarWeek,
     /// Inicia sessão Pomodoro a partir de um item "Em foco".
     StartFocusForPin(String),
     /// Simula/dispara recarregamento após erro.

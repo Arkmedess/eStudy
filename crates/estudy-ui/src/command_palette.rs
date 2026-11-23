@@ -1,5 +1,6 @@
-//! Barra de Comando (`Ctrl+K`) e pesquisa rápida global do eStudy.
+//! Barra de Comando (`Ctrl+K`) com busca global e ações diretas do eStudy.
 
+use estudy_domain::EntityId;
 use estudy_ui_kit::widgets::{card, icon_svg};
 use estudy_ui_kit::{EstudyTheme, Icon, SPACE_2, SPACE_3, SPACE_4};
 use iced::widget::{button, column, container, row, scrollable, text, text_input};
@@ -44,16 +45,22 @@ impl AppRoute {
 }
 
 /// Ação executável a partir de um item da Barra de Comando.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PaletteAction {
     /// Navega para uma tela do aplicativo.
     Navigate(AppRoute),
+    /// Abre o Drawer da Timeline "Hoje".
+    OpenTodayTimeline,
+    /// Abre um projeto específico em Projetos.
+    OpenProject(EntityId),
+    /// Abre o Drawer de uma tarefa específica.
+    OpenTask(EntityId),
     /// Inicia um bloco de foco Pomodoro com duração em minutos.
     StartFocus(u16),
-    /// Abre fluxo de criação de tarefa.
-    QuickCreateTask,
-    /// Abre fluxo de criação de evento no calendário.
-    QuickCreateEvent,
+    /// Cria uma tarefa diretamente (ou abre Projetos se título vazio).
+    QuickCreateTask(Option<String>),
+    /// Cria um evento diretamente (ou abre formulário no Calendário).
+    QuickCreateEvent(Option<String>),
     /// Registra humor do dia.
     LogMoodQuick,
     /// Sorteia a próxima leitura da estante TBR.
@@ -68,15 +75,15 @@ pub enum PaletteAction {
     ToggleThemeMode,
 }
 
-/// Comando indexado na Barra de Comando (`Ctrl+K`).
+/// Comando ou resultado de busca exibido na Barra de Comando (`Ctrl+K`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PaletteCommand {
-    /// Identificador único do comando.
-    pub id: &'static str,
-    /// Texto exibido ao usuário (ex.: `> focar 25m`).
-    pub label: &'static str,
-    /// Descrição curta da ação.
-    pub hint: &'static str,
+    /// Identificador único do item.
+    pub id: String,
+    /// Texto principal exibido ao usuário.
+    pub label: String,
+    /// Descrição curta da ação ou contexto do item encontrado.
+    pub hint: String,
     /// Atalho de teclado associado, se houver.
     pub shortcut: Option<&'static str>,
     /// Ícone vetorial SVG do catálogo.
@@ -113,8 +120,10 @@ pub struct CommandPaletteState {
     pub query: String,
     /// Índice selecionado dentro da lista filtrada atual.
     pub selected_index: usize,
-    /// Catálogo de comandos disponíveis.
+    /// Catálogo fixo de comandos disponíveis.
     pub commands: Vec<PaletteCommand>,
+    /// Itens dinâmicos vindos da busca global (projetos, tarefas, eventos, notas `FTS5`).
+    pub search_entries: Vec<PaletteCommand>,
 }
 
 impl Default for CommandPaletteState {
@@ -132,6 +141,7 @@ impl CommandPaletteState {
             query: String::new(),
             selected_index: 0,
             commands: default_commands(),
+            search_entries: Vec::new(),
         }
     }
 
@@ -164,22 +174,41 @@ impl CommandPaletteState {
         self.selected_index = 0;
     }
 
-    /// Retorna os comandos que casam com a consulta atual.
+    /// Atualiza a lista de itens pesquisáveis (projetos, tarefas, eventos e hits `FTS5`).
+    pub fn set_search_entries(&mut self, entries: Vec<PaletteCommand>) {
+        self.search_entries = entries;
+    }
+
+    /// Retorna comandos e resultados de busca que casam com a consulta atual.
     #[must_use]
-    pub fn filtered_commands(&self) -> Vec<&PaletteCommand> {
-        let needle = self.query.trim().to_lowercase();
-        if needle.is_empty() {
-            return self.commands.iter().collect();
+    pub fn filtered_commands(&self) -> Vec<PaletteCommand> {
+        let trimmed = self.query.trim();
+        if let Some(inline_cmd) = parse_inline_action_command(trimmed) {
+            return vec![inline_cmd];
         }
 
-        self.commands
+        let needle = trimmed.to_lowercase();
+        if needle.is_empty() {
+            return self.commands.clone();
+        }
+
+        let mut results: Vec<PaletteCommand> = self
+            .commands
             .iter()
-            .filter(|cmd| {
-                cmd.label.to_lowercase().contains(&needle)
-                    || cmd.hint.to_lowercase().contains(&needle)
-                    || cmd.id.to_lowercase().contains(&needle)
-            })
-            .collect()
+            .filter(|cmd| matches_needle(cmd, &needle))
+            .cloned()
+            .collect();
+
+        if !trimmed.starts_with('>') {
+            results.extend(
+                self.search_entries
+                    .iter()
+                    .filter(|entry| matches_needle(entry, &needle))
+                    .cloned(),
+            );
+        }
+
+        results
     }
 
     /// Move a seleção para o item anterior de forma circular.
@@ -211,7 +240,7 @@ impl CommandPaletteState {
     pub fn resolve_action(&self, index: Option<usize>) -> Option<PaletteAction> {
         let filtered = self.filtered_commands();
         let target_idx = index.unwrap_or(self.selected_index);
-        filtered.get(target_idx).map(|cmd| cmd.action)
+        filtered.get(target_idx).map(|cmd| cmd.action.clone())
     }
 
     /// Renderiza o overlay modal da Barra de Comando.
@@ -223,7 +252,7 @@ impl CommandPaletteState {
         let filtered = self.filtered_commands();
 
         let query_input = text_input(
-            "Buscar telas ou digitar comando (ex.: > focar 25m)...",
+            "Buscar notas, tarefas, projetos ou digitar > comando...",
             &self.query,
         )
         .on_input({
@@ -249,7 +278,7 @@ impl CommandPaletteState {
             container(
                 column![
                     icon_svg(Icon::Search, 24.0, theme.text_muted),
-                    text("Nenhum comando encontrado para esse filtro.")
+                    text("Nenhum comando ou item encontrado.")
                         .size(13)
                         .color(theme.text_muted),
                 ]
@@ -266,8 +295,8 @@ impl CommandPaletteState {
                 let row_content = row![
                     icon_svg(cmd.icon, 16.0, theme.accent),
                     column![
-                        text(cmd.label).size(14).color(theme.text_primary),
-                        text(cmd.hint).size(12).color(theme.text_muted),
+                        text(cmd.label.clone()).size(14).color(theme.text_primary),
+                        text(cmd.hint.clone()).size(12).color(theme.text_muted),
                     ]
                     .spacing(2.0)
                     .width(Length::Fill),
@@ -292,7 +321,7 @@ impl CommandPaletteState {
                     });
                 list = list.push(item_btn);
             }
-            scrollable(list).height(Length::Fixed(300.0)).into()
+            scrollable(list).height(Length::Fixed(320.0)).into()
         };
 
         let modal = card(
@@ -308,7 +337,7 @@ impl CommandPaletteState {
             .spacing(SPACE_3),
             theme,
         )
-        .width(Length::Fixed(580.0));
+        .width(Length::Fixed(600.0));
 
         container(modal)
             .width(Length::Fill)
@@ -323,6 +352,65 @@ impl CommandPaletteState {
     }
 }
 
+fn matches_needle(cmd: &PaletteCommand, needle: &str) -> bool {
+    cmd.label.to_lowercase().contains(needle)
+        || cmd.hint.to_lowercase().contains(needle)
+        || cmd.id.to_lowercase().contains(needle)
+}
+
+fn parse_inline_action_command(trimmed: &str) -> Option<PaletteCommand> {
+    if let Some(rest) = trimmed.strip_prefix("> nova tarefa ") {
+        let title = rest.trim();
+        if !title.is_empty() {
+            return Some(PaletteCommand {
+                id: "inline-new-task".to_string(),
+                label: format!("Criar tarefa: {title}"),
+                hint: "Adiciona diretamente no projeto ativo".to_string(),
+                shortcut: Some("Enter"),
+                icon: Icon::CheckSquare,
+                action: PaletteAction::QuickCreateTask(Some(title.to_string())),
+            });
+        }
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("> novo evento ") {
+        let title = rest.trim();
+        if !title.is_empty() {
+            return Some(PaletteCommand {
+                id: "inline-new-event".to_string(),
+                label: format!("Criar evento hoje: {title}"),
+                hint: "Adiciona evento na data selecionada do Calendário".to_string(),
+                shortcut: Some("Enter"),
+                icon: Icon::Calendar,
+                action: PaletteAction::QuickCreateEvent(Some(title.to_string())),
+            });
+        }
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("> focar ") {
+        let digits: String = rest
+            .trim()
+            .trim_end_matches('m')
+            .chars()
+            .filter(char::is_ascii_digit)
+            .collect();
+        if let Ok(minutes) = digits.parse::<u16>()
+            && minutes > 0
+        {
+            return Some(PaletteCommand {
+                id: "inline-focus".to_string(),
+                label: format!("Iniciar foco de {minutes} minutos"),
+                hint: "Prepara o bloco de concentração imediato".to_string(),
+                shortcut: Some("Enter"),
+                icon: Icon::Timer,
+                action: PaletteAction::StartFocus(minutes),
+            });
+        }
+    }
+
+    None
+}
+
 fn default_commands() -> Vec<PaletteCommand> {
     let mut commands = action_commands();
     commands.extend(navigation_commands());
@@ -331,146 +419,172 @@ fn default_commands() -> Vec<PaletteCommand> {
 
 fn action_commands() -> Vec<PaletteCommand> {
     vec![
-        PaletteCommand {
-            id: "focus-25",
-            label: "> focar 25m",
-            hint: "Iniciar sessão Pomodoro de 25 minutos",
-            shortcut: Some("Alt+F"),
-            icon: Icon::Timer,
-            action: PaletteAction::StartFocus(25),
-        },
-        PaletteCommand {
-            id: "new-task",
-            label: "> nova tarefa",
-            hint: "Criar tarefa rápida com prazo e projeto",
-            shortcut: None,
-            icon: Icon::CheckSquare,
-            action: PaletteAction::QuickCreateTask,
-        },
-        PaletteCommand {
-            id: "new-event",
-            label: "> novo evento",
-            hint: "Adicionar bloco ou compromisso no calendário",
-            shortcut: None,
-            icon: Icon::Calendar,
-            action: PaletteAction::QuickCreateEvent,
-        },
-        PaletteCommand {
-            id: "log-mood",
-            label: "> humor",
-            hint: "Registrar humor do dia na Home",
-            shortcut: None,
-            icon: Icon::Smile,
-            action: PaletteAction::LogMoodQuick,
-        },
-        PaletteCommand {
-            id: "tbr-pick",
-            label: "> sortear leitura",
-            hint: "Escolher próximo livro da fila TBR",
-            shortcut: None,
-            icon: Icon::Dices,
-            action: PaletteAction::RandomTbrBook,
-        },
-        PaletteCommand {
-            id: "reading-10p",
-            label: "> +10p <livro>",
-            hint: "Registrar 10 páginas lidas na obra atual",
-            shortcut: None,
-            icon: Icon::BookOpen,
-            action: PaletteAction::QuickReadingProgress(10),
-        },
-        PaletteCommand {
-            id: "cloud-backup",
-            label: "> backup nuvem",
-            hint: "Exportar snapshot SQLite limpo para pasta de nuvem",
-            shortcut: None,
-            icon: Icon::Cloud,
-            action: PaletteAction::ExportCloudSnapshot,
-        },
-        PaletteCommand {
-            id: "theme-preset",
-            label: "Alternar preset de tema",
-            hint: "Ciclar entre os 5 temas oficiais WCAG AA",
-            shortcut: None,
-            icon: Icon::Palette,
-            action: PaletteAction::CycleThemePreset,
-        },
-        PaletteCommand {
-            id: "theme-mode",
-            label: "Alternar modo claro / escuro",
-            hint: "Trocar polaridade Light e Dark preservando o preset",
-            shortcut: None,
-            icon: Icon::Sun,
-            action: PaletteAction::ToggleThemeMode,
-        },
+        cmd(
+            "focus-25",
+            "> focar 25m",
+            "Iniciar sessão Pomodoro de 25 minutos",
+            Some("Alt+F"),
+            Icon::Timer,
+            PaletteAction::StartFocus(25),
+        ),
+        cmd(
+            "today-timeline",
+            "> timeline hoje",
+            "Abrir gaveta vertical com blocos e janelas livres de hoje",
+            None,
+            Icon::Clock,
+            PaletteAction::OpenTodayTimeline,
+        ),
+        cmd(
+            "new-task",
+            "> nova tarefa",
+            "Criar tarefa rápida com prazo e projeto",
+            None,
+            Icon::CheckSquare,
+            PaletteAction::QuickCreateTask(None),
+        ),
+        cmd(
+            "new-event",
+            "> novo evento",
+            "Adicionar bloco ou compromisso no calendário",
+            None,
+            Icon::Calendar,
+            PaletteAction::QuickCreateEvent(None),
+        ),
+        cmd(
+            "log-mood",
+            "> humor",
+            "Registrar humor do dia na Home",
+            None,
+            Icon::Smile,
+            PaletteAction::LogMoodQuick,
+        ),
+        cmd(
+            "tbr-pick",
+            "> sortear leitura",
+            "Escolher próximo livro da fila TBR",
+            None,
+            Icon::Dices,
+            PaletteAction::RandomTbrBook,
+        ),
+        cmd(
+            "reading-10p",
+            "> +10p <livro>",
+            "Registrar 10 páginas lidas na obra atual",
+            None,
+            Icon::BookOpen,
+            PaletteAction::QuickReadingProgress(10),
+        ),
+        cmd(
+            "cloud-backup",
+            "> backup nuvem",
+            "Exportar snapshot SQLite limpo para pasta de nuvem",
+            None,
+            Icon::Cloud,
+            PaletteAction::ExportCloudSnapshot,
+        ),
+        cmd(
+            "theme-preset",
+            "Alternar preset de tema",
+            "Ciclar entre os 5 temas oficiais WCAG AA",
+            None,
+            Icon::Palette,
+            PaletteAction::CycleThemePreset,
+        ),
+        cmd(
+            "theme-mode",
+            "Alternar modo claro / escuro",
+            "Trocar polaridade Light e Dark preservando o preset",
+            None,
+            Icon::Sun,
+            PaletteAction::ToggleThemeMode,
+        ),
     ]
 }
 
 fn navigation_commands() -> Vec<PaletteCommand> {
     vec![
-        PaletteCommand {
-            id: "nav-home",
-            label: "Ir para Home",
-            hint: "Visão pessoal em 3 colunas",
-            shortcut: None,
-            icon: Icon::Home,
-            action: PaletteAction::Navigate(AppRoute::Home),
-        },
-        PaletteCommand {
-            id: "nav-projects",
-            label: "Ir para Projetos",
-            hint: "Kanban 4 colunas e frameworks leves",
-            shortcut: None,
-            icon: Icon::FolderKanban,
-            action: PaletteAction::Navigate(AppRoute::Projects),
-        },
-        PaletteCommand {
-            id: "nav-calendar",
-            label: "Ir para Calendário",
-            hint: "Visão unificada de eventos e prazos",
-            shortcut: None,
-            icon: Icon::Calendar,
-            action: PaletteAction::Navigate(AppRoute::Calendar),
-        },
-        PaletteCommand {
-            id: "nav-studies",
-            label: "Ir para Estudos",
-            hint: "Ciclo contínuo, revisões espaçadas e flashcards",
-            shortcut: None,
-            icon: Icon::GraduationCap,
-            action: PaletteAction::Navigate(AppRoute::Studies),
-        },
-        PaletteCommand {
-            id: "nav-bookshelf",
-            label: "Ir para Estante",
-            hint: "Leituras, estantes customizáveis e citações",
-            shortcut: None,
-            icon: Icon::BookOpen,
-            action: PaletteAction::Navigate(AppRoute::Bookshelf),
-        },
-        PaletteCommand {
-            id: "nav-garden",
-            label: "Ir para Jardim & Pets",
-            hint: "Explorar canteiros e interagir com seu pet",
-            shortcut: None,
-            icon: Icon::Sprout,
-            action: PaletteAction::Navigate(AppRoute::GardenAndPets),
-        },
-        PaletteCommand {
-            id: "nav-shop",
-            label: "Ir para Loja",
-            hint: "Trocar moedas por temas, pets, molduras e faixas",
-            shortcut: None,
-            icon: Icon::ShoppingBag,
-            action: PaletteAction::Navigate(AppRoute::Shop),
-        },
-        PaletteCommand {
-            id: "nav-settings",
-            label: "Ir para Configurações",
-            hint: "Backup na nuvem, permissões MCP e preferências",
-            shortcut: None,
-            icon: Icon::Settings,
-            action: PaletteAction::Navigate(AppRoute::Settings),
-        },
+        cmd(
+            "nav-home",
+            "Ir para Home",
+            "Visão pessoal em 3 colunas",
+            None,
+            Icon::Home,
+            PaletteAction::Navigate(AppRoute::Home),
+        ),
+        cmd(
+            "nav-projects",
+            "Ir para Projetos",
+            "Kanban 4 colunas e frameworks leves",
+            None,
+            Icon::FolderKanban,
+            PaletteAction::Navigate(AppRoute::Projects),
+        ),
+        cmd(
+            "nav-calendar",
+            "Ir para Calendário",
+            "Visão unificada de eventos e prazos",
+            None,
+            Icon::Calendar,
+            PaletteAction::Navigate(AppRoute::Calendar),
+        ),
+        cmd(
+            "nav-studies",
+            "Ir para Estudos",
+            "Ciclo contínuo, revisões espaçadas e flashcards",
+            None,
+            Icon::GraduationCap,
+            PaletteAction::Navigate(AppRoute::Studies),
+        ),
+        cmd(
+            "nav-bookshelf",
+            "Ir para Estante",
+            "Leituras, estantes customizáveis e citações",
+            None,
+            Icon::BookOpen,
+            PaletteAction::Navigate(AppRoute::Bookshelf),
+        ),
+        cmd(
+            "nav-garden",
+            "Ir para Jardim & Pets",
+            "Explorar canteiros e interagir com seu pet",
+            None,
+            Icon::Sprout,
+            PaletteAction::Navigate(AppRoute::GardenAndPets),
+        ),
+        cmd(
+            "nav-shop",
+            "Ir para Loja",
+            "Trocar moedas por temas, pets, molduras e faixas",
+            None,
+            Icon::ShoppingBag,
+            PaletteAction::Navigate(AppRoute::Shop),
+        ),
+        cmd(
+            "nav-settings",
+            "Ir para Configurações",
+            "Backup na nuvem, permissões MCP e preferências",
+            None,
+            Icon::Settings,
+            PaletteAction::Navigate(AppRoute::Settings),
+        ),
     ]
+}
+
+fn cmd(
+    id: &str,
+    label: &str,
+    hint: &str,
+    shortcut: Option<&'static str>,
+    icon: Icon,
+    action: PaletteAction,
+) -> PaletteCommand {
+    PaletteCommand {
+        id: id.to_string(),
+        label: label.to_string(),
+        hint: hint.to_string(),
+        shortcut,
+        icon,
+        action,
+    }
 }

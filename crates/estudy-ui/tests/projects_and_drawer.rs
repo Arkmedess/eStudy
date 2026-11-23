@@ -160,3 +160,35 @@ fn should_prevent_more_than_5_focus_pins_in_projects_drawer() {
     );
     assert_eq!(pinned, MAX_FOCUS_PINNED_TASKS - 1);
 }
+
+#[test]
+fn should_avoid_dirty_writes_during_typing_and_flush_only_changed_task_on_close() {
+    let mut app = make_projects_app();
+    let _ = app.projects_state.take_dirty();
+
+    let task_id = app.projects_state.tasks[0].id.clone();
+    app.update(AppMessage::Projects(ProjectsMessage::OpenTaskDrawer(
+        task_id.clone(),
+    )));
+    let (p0, t0) = app.projects_state.take_dirty();
+    assert!(p0.is_empty() && t0.is_empty());
+
+    for step in 0..50 {
+        app.update(AppMessage::Projects(ProjectsMessage::DrawerTitleChanged(
+            format!("Título em edição {step}"),
+        )));
+        app.update(AppMessage::Projects(
+            ProjectsMessage::DrawerDescriptionChanged(format!("Descrição {step}")),
+        ));
+        let (p_mid, t_mid) = app.projects_state.take_dirty();
+        assert!(
+            p_mid.is_empty() && t_mid.is_empty(),
+            "digitação contínua não deve disparar escrita imediata"
+        );
+    }
+
+    app.update(AppMessage::Projects(ProjectsMessage::CloseTaskDrawer));
+    let (p_end, t_end) = app.projects_state.take_dirty();
+    assert!(p_end.is_empty());
+    assert_eq!(t_end, vec![task_id]);
+}
