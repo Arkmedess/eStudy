@@ -6,6 +6,10 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ## [Unreleased]
 
+---
+
+## [0.2.0] - 2026-11-22
+
 ### Adicionado
 - Regras de Projetos, Tarefas multi-projeto, Checklists (`0/20`), Marcos e Matriz de Eisenhower em `crates/estudy-domain`.
 - Repositório transacional `SqliteProjectRepository` em `crates/estudy-storage` com carregamento em lote sem consultas N+1, tags, checklists e soft delete.

@@ -14,7 +14,7 @@ Plano incremental de entregas do **eStudy**. Cada marco entrega um conjunto func
   - `crates/estudy-ui-kit` com os 5 presets (incluindo *Oliva Orgânico*), 87 ícones Lucide SVG e `apps/estudy-preview` para testar componentes isolados.
   - Home em 3 colunas (Perfil + "Hoje", Mapa de calor 365 dias + Projetos, Em Foco + Diário de Humor + Quadro personalizável) e estrutura inicial da Barra de Comando (`Ctrl+K`).
 
-- **v0.2.0 — Projetos (Kanban + Frameworks Leves) e Gaveta da Tarefa**
+- **v0.2.0 — Projetos (Kanban + Frameworks Leves) e Gaveta da Tarefa** *(Concluído)*
   - Visão de projeto com Kanban de 4 colunas (`Backlog`, `A fazer`, `Em andamento`, `Concluído`).
   - Gaveta lateral da tarefa com checklist `0/20`, descrição Markdown (`Escrever/Visualizar`), pin *Em foco* e visões opcionais (*Marcos*, *Eisenhower*, *Foco Semanal*).
 
