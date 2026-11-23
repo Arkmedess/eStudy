@@ -8,6 +8,17 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
+## [0.1.1] - 2026-11-22
+
+### Corrigido e Aprimorado
+- Barra superior ajustada com atalho de foco, notificações/conquistas e menu compacto de módulos (*Home, Projetos, Calendário, Estudos, Estante, Jardim & Pets, Loja, Configurações*).
+- Diário de humor com alternância entre os últimos 7 dias e visão anual, e exibição de todas as 7 molduras no quadro pessoal.
+- Barra de comandos (`Ctrl+K`) ampliada com `> +10p <livro>`, Loja e Configurações.
+- Leitura e criação do perfil inicial diretamente no banco SQLite local ao abrir o aplicativo.
+- Perfil de compilação `dev` ajustado com `debug = "line-tables-only"` para acelerar montagens locais preservando o cache.
+
+---
+
 ## [0.1.0] - 2026-11-22
 
 ### Adicionado
