@@ -22,7 +22,7 @@ Plano incremental de entregas do **eStudy**. Cada marco entrega um conjunto func
   - Calendário (`Ano / Mês / Semana / Dia`) unificando eventos recorrentes/multi-dia e tarefas com prazo.
   - Gaveta "Hoje" com cálculo automático de janelas livres, linha *Agora* em tempo real e busca global via `FTS5` + ações rápidas no `Ctrl+K`.
 
-- **v0.4.0 — Pomodoro, Modo Foco e Motor de Áudio Procedural DSP**
+- **v0.4.0 — Pomodoro, Modo Foco e Motor de Áudio Procedural DSP** *(Concluído)*
   - Temporizador em `Canvas` com relógio monotônico, Modo Foco em tela cheia, captura pós-sessão e síntese procedural de áudio (`cpal` + fila lock-free) em `-16 LUFS`.
 
 - **v0.5.0 — Módulo de Estudos Completo**

@@ -8,6 +8,19 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
+## [0.4.0] - 2026-11-23
+
+### Aprimorado
+- Polimento visual suave e novos primitivos do `estudy-ui-kit` (cartões com cantos de `16px`, superfícies tonais/macias, divisores finos, seletores segmentados, chips em pílula, barra de progresso, métricas, atalhos `kbd_hint`, `banner_toast` e envelopes padrão de drawer/modal), mantendo contraste WCAG 2.2 AA em todos os 10 temas.
+
+### Adicionado
+- Regras de Pomodoro e Modo Foco (`PomodoroTimer`, presets `25/5`, `50/10` e `15/3`, faixas de áudio `DspTrack` e regra de recompensa mínima de `15` minutos) em `crates/estudy-domain`.
+- Novo crate `crates/estudy-audio` com motor procedural DSP lock-free (`Silêncio`, `Chuva Marrom`, `Vento Rosa`, `Drone Quente`, `Alfa 10 Hz`) calibrado em `-16 LUFS`, saída via `cpal` e fallback silencioso quando headless.
+- Repositório transacional `SqliteFocusRepository` em `crates/estudy-storage` gravando sessão em `study_sessions`, captura rápida em `notes` (`FTS5`) e crédito HMAC-SHA256 respeitando o teto diário de moedas.
+- Modo Foco em tela cheia (`Esc` sai mantendo o cronômetro), anel vetorial em `Canvas` (`FocusRingProgram`), dock de áudio DSP, captura pós-sessão e ticker monotônico condicional de 1s em `crates/estudy-ui` e `apps/estudy-desktop`.
+
+---
+
 ## [0.3.0] - 2026-11-23
 
 ### Adicionado
@@ -65,7 +78,8 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
-[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Arkmedess/eStudy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Arkmedess/eStudy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Arkmedess/eStudy/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Arkmedess/eStudy/compare/v0.1.0...v0.1.1
