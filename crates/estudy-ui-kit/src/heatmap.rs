@@ -39,11 +39,20 @@ impl HeatmapData {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct HeatmapRenderKey {
+    days_hash: u64,
+    preset: ThemePreset,
+    mode: ThemeMode,
+    width: u32,
+    height: u32,
+}
+
 /// Estado interno de cache de geometria do `HeatmapGrid`.
 #[derive(Default)]
 pub struct HeatmapCanvasState {
     cache: canvas::Cache,
-    last_signature: Cell<Option<(u64, ThemePreset, ThemeMode)>>,
+    last_signature: Cell<Option<HeatmapRenderKey>>,
 }
 
 /// Programa `Canvas` que desenha a grade anual de constância em 53 semanas × 7 dias.
@@ -58,6 +67,7 @@ pub struct HeatmapGrid<'a> {
 impl<Message> canvas::Program<Message> for HeatmapGrid<'_> {
     type State = HeatmapCanvasState;
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn draw(
         &self,
         state: &Self::State,
@@ -66,11 +76,13 @@ impl<Message> canvas::Program<Message> for HeatmapGrid<'_> {
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        let signature = (
-            hash_days(&self.data.days),
-            self.theme.preset,
-            self.theme.mode,
-        );
+        let signature = HeatmapRenderKey {
+            days_hash: hash_days(&self.data.days),
+            preset: self.theme.preset,
+            mode: self.theme.mode,
+            width: bounds.width.round().max(0.0) as u32,
+            height: bounds.height.round().max(0.0) as u32,
+        };
         if state.last_signature.get() != Some(signature) {
             state.cache.clear();
             state.last_signature.set(Some(signature));
@@ -85,18 +97,31 @@ impl<Message> canvas::Program<Message> for HeatmapGrid<'_> {
             let cell_w = ((bounds.width - gap * (cols as f32 - 1.0)) / cols as f32).max(4.0);
             #[allow(clippy::cast_precision_loss)]
             let cell_h = ((bounds.height - gap * (rows as f32 - 1.0)) / rows as f32).max(4.0);
-            let cell_size = cell_w.min(cell_h).min(12.0);
+            let cell_size = cell_w.min(cell_h).min(16.0);
+
+            #[allow(clippy::cast_precision_loss)]
+            let total_w = cols as f32 * cell_size + (cols as f32 - 1.0) * gap;
+            #[allow(clippy::cast_precision_loss)]
+            let total_h = rows as f32 * cell_size + (rows as f32 - 1.0) * gap;
+            let origin_x = ((bounds.width - total_w) * 0.5).max(0.0);
+            let origin_y = ((bounds.height - total_h) * 0.5).max(0.0);
+            let corner = (cell_size * 0.24).clamp(1.5, 3.5);
 
             for (day_idx, &count) in self.data.days.iter().enumerate() {
                 let col = day_idx / rows;
                 let row = day_idx % rows;
                 #[allow(clippy::cast_precision_loss)]
-                let x = col as f32 * (cell_size + gap);
+                let x = origin_x + col as f32 * (cell_size + gap);
                 #[allow(clippy::cast_precision_loss)]
-                let y = row as f32 * (cell_size + gap);
+                let y = origin_y + row as f32 * (cell_size + gap);
 
                 let color = level_color(self.theme, HeatmapData::intensity_level(count));
-                frame.fill_rectangle(Point::new(x, y), Size::new(cell_size, cell_size), color);
+                let tile = canvas::Path::rounded_rectangle(
+                    Point::new(x, y),
+                    Size::new(cell_size, cell_size),
+                    corner.into(),
+                );
+                frame.fill(&tile, color);
             }
         });
 

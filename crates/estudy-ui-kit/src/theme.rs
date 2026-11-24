@@ -1,7 +1,7 @@
 //! Tokens visuais, os 5 presets WCAG 2.2 AA e slots cosméticos do eStudy.
 
 use iced::widget::{button, container, text_input};
-use iced::{Border, Color, Shadow, Vector};
+use iced::{Border, Color, Shadow};
 
 /// Unidade base de espaçamento (`4px`).
 pub const SPACE_1: f32 = 4.0;
@@ -488,7 +488,7 @@ impl EstudyTheme {
         }
     }
 
-    /// Estilo de cartão elevado principal com cantos suaves e sombra difusa.
+    /// Estilo de cartão elevado principal com cantos suaves e borda hairline.
     #[must_use]
     pub fn card_style(&self) -> container::Style {
         container::Style {
@@ -499,17 +499,7 @@ impl EstudyTheme {
                 width: 1.0,
                 radius: RADIUS_CARD.into(),
             },
-            shadow: Shadow {
-                color: Color {
-                    a: match self.mode {
-                        ThemeMode::Light => 0.04,
-                        ThemeMode::Dark => 0.24,
-                    },
-                    ..Color::BLACK
-                },
-                offset: Vector::new(0.0, 4.0),
-                blur_radius: 14.0,
-            },
+            shadow: Shadow::default(),
             snap: true,
         }
     }
@@ -525,17 +515,7 @@ impl EstudyTheme {
                 width: 0.0,
                 radius: RADIUS_CARD.into(),
             },
-            shadow: Shadow {
-                color: Color {
-                    a: match self.mode {
-                        ThemeMode::Light => 0.08,
-                        ThemeMode::Dark => 0.26,
-                    },
-                    ..Color::BLACK
-                },
-                offset: Vector::new(0.0, 4.0),
-                blur_radius: 16.0,
-            },
+            shadow: Shadow::default(),
             snap: true,
         }
     }
@@ -583,17 +563,7 @@ impl EstudyTheme {
                 width: 1.0,
                 radius: RADIUS_CARD.into(),
             },
-            shadow: Shadow {
-                color: Color {
-                    a: match self.mode {
-                        ThemeMode::Light => 0.12,
-                        ThemeMode::Dark => 0.38,
-                    },
-                    ..Color::BLACK
-                },
-                offset: Vector::new(-4.0, 0.0),
-                blur_radius: 24.0,
-            },
+            shadow: Shadow::default(),
             snap: true,
         }
     }
@@ -609,17 +579,7 @@ impl EstudyTheme {
                 width: 1.0,
                 radius: RADIUS_CARD.into(),
             },
-            shadow: Shadow {
-                color: Color {
-                    a: match self.mode {
-                        ThemeMode::Light => 0.14,
-                        ThemeMode::Dark => 0.44,
-                    },
-                    ..Color::BLACK
-                },
-                offset: Vector::new(0.0, 10.0),
-                blur_radius: 28.0,
-            },
+            shadow: Shadow::default(),
             snap: true,
         }
     }
@@ -659,7 +619,7 @@ impl EstudyTheme {
             BoardFrameStyle::Moderna => (self.bg, self.text_primary, 2.0, 2.0),
             BoardFrameStyle::Japandi => (self.panel, rgb(0xb8_9f_80), 3.0, 10.0),
             BoardFrameStyle::Museu => (rgb(0xf7_f3_eb), rgb(0x8c_6d_3f), 4.0, 4.0),
-            BoardFrameStyle::Nenhum => (Color::TRANSPARENT, Color::TRANSPARENT, 0.0, 0.0),
+            BoardFrameStyle::Nenhum => (self.surface_soft, self.border_subtle, 1.0, RADIUS_PANEL),
         };
 
         container::Style {

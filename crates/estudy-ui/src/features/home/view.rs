@@ -147,7 +147,7 @@ fn view_three_columns<'a, Message: Clone + 'a>(
     map_route: impl Fn(AppRoute) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
     let hero = view_hero_banner(data, greeting, theme, map_home.clone(), map_route.clone());
-    let left = view_left_column(data, greeting, theme, map_home.clone(), map_route);
+    let left = view_left_column(data, theme, map_home.clone());
     let center = view_center_column(data, theme);
     let right = view_right_column(data, theme, map_home);
 
@@ -156,9 +156,14 @@ fn view_three_columns<'a, Message: Clone + 'a>(
         .width(Length::Fill);
 
     scrollable(
-        container(column![hero, columns].spacing(SPACE_5).width(Length::Fill))
-            .padding(SPACE_6)
-            .width(Length::Fill),
+        container(
+            container(column![hero, columns].spacing(SPACE_5).width(Length::Fill))
+                .max_width(1360.0)
+                .width(Length::Fill),
+        )
+        .padding(SPACE_6)
+        .center_x(Length::Fill)
+        .width(Length::Fill),
     )
     .height(Length::Fill)
     .into()
@@ -246,23 +251,20 @@ fn view_hero_banner<'a, Message: Clone + 'a>(
 
 fn view_left_column<'a, Message: Clone + 'a>(
     data: &'a HomeDashboardData,
-    greeting: &'a str,
     theme: EstudyTheme,
     map_home: impl Fn(HomeMessage) -> Message + 'a,
-    map_route: impl Fn(AppRoute) -> Message + 'a,
 ) -> Element<'a, Message> {
     column![
-        view_profile_card(data, greeting, theme),
-        view_today_card(data, theme, map_home, map_route),
+        view_profile_card(data, theme),
+        view_today_card(data, theme, map_home),
     ]
     .spacing(SPACE_4)
-    .width(Length::FillPortion(3))
+    .width(Length::FillPortion(4))
     .into()
 }
 
 fn view_profile_card<'a, Message: 'a>(
     data: &'a HomeDashboardData,
-    greeting: &'a str,
     theme: EstudyTheme,
 ) -> Element<'a, Message> {
     let initials: String = data
@@ -273,14 +275,14 @@ fn view_profile_card<'a, Message: 'a>(
         .map_or_else(|| "E".to_string(), |ch| ch.to_uppercase().to_string());
 
     let avatar = container(text(initials).size(18).color(theme.on_accent))
-        .width(Length::Fixed(42.0))
-        .height(Length::Fixed(42.0))
-        .center_x(Length::Fixed(42.0))
-        .center_y(Length::Fixed(42.0))
+        .width(Length::Fixed(44.0))
+        .height(Length::Fixed(44.0))
+        .center_x(Length::Fixed(44.0))
+        .center_y(Length::Fixed(44.0))
         .style(move |_| iced::widget::container::Style {
             background: Some(theme.accent.into()),
             border: iced::Border {
-                radius: 21.0.into(),
+                radius: 22.0.into(),
                 ..iced::Border::default()
             },
             ..iced::widget::container::Style::default()
@@ -296,16 +298,16 @@ fn view_profile_card<'a, Message: 'a>(
             row![
                 avatar,
                 column![
-                    text(format!("{greeting}, {}", data.profile.display_name))
+                    text(&data.profile.display_name)
                         .size(16)
                         .color(theme.text_primary),
                     row![
                         icon_svg(Icon::Flame, 14.0, theme.warning),
-                        text(format!("{}d", data.profile.streak_days))
+                        text(format!("{}d seguidos", data.profile.streak_days))
                             .size(12)
                             .color(theme.text_muted),
                         icon_svg(Icon::Coins, 14.0, theme.accent),
-                        text(format!("{}", data.profile.coins))
+                        text(format!("{} moedas", data.profile.coins))
                             .size(12)
                             .color(theme.text_muted),
                     ]
@@ -316,6 +318,7 @@ fn view_profile_card<'a, Message: 'a>(
             ]
             .spacing(SPACE_3)
             .align_y(Alignment::Center),
+            hairline_divider(theme),
             medals_row,
         ]
         .spacing(SPACE_3),
@@ -328,9 +331,8 @@ fn view_today_card<'a, Message: Clone + 'a>(
     data: &'a HomeDashboardData,
     theme: EstudyTheme,
     map_home: impl Fn(HomeMessage) -> Message + 'a,
-    map_route: impl Fn(AppRoute) -> Message + 'a,
 ) -> Element<'a, Message> {
-    let mut today_list = column![].spacing(SPACE_2);
+    let mut today_list = column![].spacing(SPACE_1);
     for (idx, item) in data.today_items.iter().enumerate() {
         let icon = if item.done {
             Icon::CheckCircle2
@@ -347,53 +349,41 @@ fn view_today_card<'a, Message: Clone + 'a>(
             row![
                 icon_svg(icon, 15.0, tint),
                 text(&item.time_label).size(12).color(theme.text_muted),
-                text(&item.title).size(13).color(theme.text_primary),
+                text(&item.title).size(13).color(if item.done {
+                    theme.text_muted
+                } else {
+                    theme.text_primary
+                }),
             ]
             .spacing(SPACE_2)
             .align_y(Alignment::Center),
         )
         .on_press(map_home(HomeMessage::ToggleTodayItem(idx)))
         .width(Length::Fill)
-        .padding([SPACE_1, SPACE_2])
+        .padding([SPACE_2, SPACE_2])
         .style(move |_, status| theme.subtle_button_style(status));
 
         today_list = today_list.push(item_btn);
+        if idx + 1 < data.today_items.len() {
+            today_list = today_list.push(hairline_divider(theme));
+        }
     }
 
-    let shortcuts = row![
-        pill_chip(
-            "Timeline",
-            None,
-            Some(Icon::Clock),
-            true,
-            map_home(HomeMessage::OpenTodayTimeline),
-            theme,
-        ),
-        pill_chip(
-            "Semana",
-            None,
-            None,
-            false,
-            map_home(HomeMessage::OpenCalendarWeek),
-            theme,
-        ),
-        pill_chip(
-            "Calendário",
-            None,
-            None,
-            false,
-            map_route(AppRoute::Calendar),
-            theme,
-        ),
-    ]
-    .spacing(SPACE_2);
+    let timeline_action = pill_chip(
+        "Abrir timeline completa",
+        None,
+        Some(Icon::Clock),
+        false,
+        map_home(HomeMessage::OpenTodayTimeline),
+        theme,
+    );
 
     card(
         column![
             section_header(Icon::Calendar, "Hoje", theme),
             hairline_divider(theme),
             today_list,
-            shortcuts,
+            timeline_action,
         ]
         .spacing(SPACE_3),
         theme,
@@ -427,7 +417,7 @@ fn view_center_column<'a, Message: 'a>(
         theme,
     })
     .width(Length::Fill)
-    .height(Length::Fixed(106.0));
+    .height(Length::Fixed(124.0));
 
     let heatmap_card = card(
         column![
@@ -536,7 +526,7 @@ fn view_right_column<'a, Message: Clone + 'a>(
         view_pinboard_card(data, theme, map_home),
     ]
     .spacing(SPACE_4)
-    .width(Length::FillPortion(3))
+    .width(Length::FillPortion(4))
     .into()
 }
 

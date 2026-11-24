@@ -528,12 +528,19 @@ impl EstudyApp {
             ThemeMode::Dark => Icon::Sun,
         };
 
+        let focus_label = if self.is_focus_ticking() {
+            let rem = self.focus_state.timer.remaining_seconds();
+            format!("Focar · {:02}:{:02}", rem / 60, rem % 60)
+        } else {
+            "Focar".to_string()
+        };
+
         let controls = row![
             cmd_btn,
             button(
                 row![
                     icon_svg(Icon::Timer, 14.0, theme.accent),
-                    text("Focar").size(12).color(theme.text_primary),
+                    text(focus_label).size(12).color(theme.text_primary),
                 ]
                 .spacing(SPACE_2)
                 .align_y(Alignment::Center),
