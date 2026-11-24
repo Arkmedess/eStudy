@@ -1,6 +1,9 @@
 //! Sandbox isolado de visualização dos componentes do `estudy-ui-kit`.
 
-use estudy_ui_kit::widgets::{card, icon_svg, section_header, status_badge};
+use estudy_ui_kit::widgets::{
+    banner_toast, card, empty_placeholder, hairline_divider, icon_svg, kbd_hint, metric_stat,
+    pill_chip, progress_track, section_header, segmented_switch, status_badge, tonal_card,
+};
 use estudy_ui_kit::{
     BoardFrameStyle, EstudyTheme, HeatmapData, HeatmapGrid, Icon, SPACE_2, SPACE_3, SPACE_4,
     ThemeMode, ThemePreset,
@@ -8,17 +11,26 @@ use estudy_ui_kit::{
 use iced::widget::{button, canvas, column, container, row, scrollable, text};
 use iced::{Alignment, Element, Length};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PreviewFilter {
+    All,
+    Goals,
+    Ideas,
+}
+
 #[derive(Debug, Clone, Copy)]
 enum PreviewMessage {
     SelectPreset(ThemePreset),
     ToggleMode,
     SelectFrame(BoardFrameStyle),
+    SelectFilter(PreviewFilter),
 }
 
 struct PreviewApp {
     preset: ThemePreset,
     mode: ThemeMode,
     frame: BoardFrameStyle,
+    filter: PreviewFilter,
     heatmap: HeatmapData,
 }
 
@@ -35,6 +47,7 @@ impl PreviewApp {
             preset: ThemePreset::OlivaOrganico,
             mode: ThemeMode::Light,
             frame: BoardFrameStyle::Japandi,
+            filter: PreviewFilter::All,
             heatmap,
         }
     }
@@ -44,29 +57,46 @@ impl PreviewApp {
             PreviewMessage::SelectPreset(preset) => self.preset = preset,
             PreviewMessage::ToggleMode => self.mode = self.mode.toggle(),
             PreviewMessage::SelectFrame(frame) => self.frame = frame,
+            PreviewMessage::SelectFilter(filter) => self.filter = filter,
         }
     }
 
     fn view(&self) -> Element<'_, PreviewMessage> {
         let theme = EstudyTheme::resolve(self.preset, self.mode);
         let preset_row = self.view_preset_row(theme);
-        let mode_btn = button(text(self.mode.label()).size(12).color(theme.on_accent))
-            .on_press(PreviewMessage::ToggleMode)
-            .padding([SPACE_2, SPACE_3])
-            .style(move |_, status| theme.primary_button_style(status));
+        let mode_btn = pill_chip(
+            self.mode.label(),
+            None,
+            Some(match self.mode {
+                ThemeMode::Light => Icon::Moon,
+                ThemeMode::Dark => Icon::Sun,
+            }),
+            true,
+            PreviewMessage::ToggleMode,
+            theme,
+        );
 
         let content = column![
             row![
                 section_header(Icon::Palette, "eStudy UI Kit Preview", theme),
                 status_badge("WCAG 2.2 AA", theme.success, theme),
+                kbd_hint("Ctrl+K", theme),
                 mode_btn,
             ]
             .spacing(SPACE_3)
             .align_y(Alignment::Center),
             preset_row,
+            banner_toast(
+                Icon::Info,
+                "Cartões com cantos concêntricos, hairline dividers e componentes em pílula.",
+                None,
+                theme,
+            ),
+            self.view_primitives_showcase(theme),
             card(
                 column![
                     section_header(Icon::Flame, "Heatmap Anual (365 dias)", theme),
+                    hairline_divider(theme),
                     canvas(HeatmapGrid {
                         data: &self.heatmap,
                         theme,
@@ -96,47 +126,94 @@ impl PreviewApp {
     fn view_preset_row(&self, theme: EstudyTheme) -> Element<'_, PreviewMessage> {
         let mut preset_row = row![].spacing(SPACE_2);
         for preset in ThemePreset::ALL {
-            let active = preset == self.preset;
-            preset_row = preset_row.push(
-                button(text(preset.label()).size(12).color(if active {
-                    theme.on_accent
-                } else {
-                    theme.text_primary
-                }))
-                .on_press(PreviewMessage::SelectPreset(preset))
-                .padding([SPACE_2, SPACE_3])
-                .style(move |_, status| {
-                    if active {
-                        theme.primary_button_style(status)
-                    } else {
-                        theme.ghost_button_style(status)
-                    }
-                }),
-            );
+            preset_row = preset_row.push(pill_chip(
+                preset.label(),
+                None,
+                None,
+                preset == self.preset,
+                PreviewMessage::SelectPreset(preset),
+                theme,
+            ));
         }
         preset_row.into()
+    }
+
+    fn view_primitives_showcase(&self, theme: EstudyTheme) -> Element<'_, PreviewMessage> {
+        const FILTERS: [(PreviewFilter, &str); 3] = [
+            (PreviewFilter::All, "Todas"),
+            (PreviewFilter::Goals, "Metas"),
+            (PreviewFilter::Ideas, "Ideias"),
+        ];
+        let switch = segmented_switch(&FILTERS, self.filter, PreviewMessage::SelectFilter, theme);
+
+        let stats = row![
+            metric_stat("Sessões", "18", "nos últimos 7 dias", theme.accent, theme)
+                .width(Length::Fill),
+            metric_stat(
+                "RAM Alvo",
+                "33 MiB",
+                "tiny-skia padrão",
+                theme.success,
+                theme
+            )
+            .width(Length::Fill),
+            tonal_card(
+                column![
+                    text("Foco ativo").size(11).color(theme.on_accent),
+                    text("25:00").size(22).color(theme.on_accent),
+                    text("Bloco pronto").size(11).color(theme.on_accent),
+                ]
+                .spacing(4.0),
+                theme,
+            )
+            .padding(SPACE_3)
+            .width(Length::Fill),
+        ]
+        .spacing(SPACE_3);
+
+        card(
+            column![
+                row![
+                    section_header(Icon::Layers, "Componentes Base", theme),
+                    container(switch)
+                        .align_x(Alignment::End)
+                        .width(Length::Fill),
+                ]
+                .align_y(Alignment::Center),
+                hairline_divider(theme),
+                stats,
+                progress_track(0.68, theme.accent, theme),
+                empty_placeholder(
+                    Icon::FolderKanban,
+                    "Estado vazio acolhedor",
+                    "Orientação clara sem ruído visual excessivo.",
+                    Some(
+                        button(text("Criar item").size(12).color(theme.on_accent))
+                            .on_press(PreviewMessage::SelectFilter(PreviewFilter::All))
+                            .padding([6.0, 14.0])
+                            .style(move |_, status| theme.pill_button_style(true, status))
+                            .into(),
+                    ),
+                    theme,
+                ),
+            ]
+            .spacing(SPACE_3),
+            theme,
+        )
+        .into()
     }
 
     fn view_frames_card(&self, theme: EstudyTheme) -> Element<'_, PreviewMessage> {
         let mut frame_row = row![].spacing(SPACE_2);
         for frame in BoardFrameStyle::ALL {
-            let active = frame == self.frame;
-            frame_row = frame_row.push(
-                button(text(frame.label()).size(11).color(if active {
-                    theme.on_accent
-                } else {
-                    theme.text_primary
-                }))
-                .on_press(PreviewMessage::SelectFrame(frame))
-                .padding([4.0, 8.0])
-                .style(move |_, status| {
-                    if active {
-                        theme.primary_button_style(status)
-                    } else {
-                        theme.ghost_button_style(status)
-                    }
-                }),
-            );
+            frame_row = frame_row.push(pill_chip(
+                frame.label(),
+                None,
+                None,
+                frame == self.frame,
+                PreviewMessage::SelectFrame(frame),
+                theme,
+            ));
         }
 
         let active_frame = self.frame;
@@ -198,7 +275,7 @@ fn view_icons_card<'a>(theme: EstudyTheme) -> Element<'a, PreviewMessage> {
 fn main() -> iced::Result {
     iced::application(PreviewApp::boot, PreviewApp::update, PreviewApp::view)
         .title("eStudy UI Kit · Preview")
-        .window_size((1180.0, 820.0))
+        .window_size((1180.0, 860.0))
         .centered()
         .run()
 }

@@ -1,10 +1,12 @@
 //! Barra de Comando (`Ctrl+K`) com busca global e ações diretas do eStudy.
 
 use estudy_domain::EntityId;
-use estudy_ui_kit::widgets::{card, icon_svg};
-use estudy_ui_kit::{EstudyTheme, Icon, SPACE_2, SPACE_3, SPACE_4};
-use iced::widget::{button, column, container, row, scrollable, text, text_input};
-use iced::{Alignment, Color, Element, Length};
+use estudy_ui_kit::widgets::{
+    empty_placeholder, hairline_divider, icon_svg, kbd_hint, modal_surface,
+};
+use estudy_ui_kit::{EstudyTheme, Icon, SPACE_2, SPACE_3};
+use iced::widget::{button, column, row, scrollable, text, text_input};
+use iced::{Alignment, Element, Length};
 
 /// Rotas principais navegáveis pela Barra de Comando e Topbar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -261,7 +263,8 @@ impl CommandPaletteState {
         })
         .on_submit(map_msg(PaletteMessage::ExecuteSelected))
         .padding(SPACE_3)
-        .size(15);
+        .size(15)
+        .style(move |_, status| theme.soft_input_style(status));
 
         let header = row![
             icon_svg(Icon::Command, 18.0, theme.accent),
@@ -269,30 +272,24 @@ impl CommandPaletteState {
             button(icon_svg(Icon::X, 16.0, theme.text_muted))
                 .on_press(map_msg(PaletteMessage::Close))
                 .padding(SPACE_2)
-                .style(move |_, status| theme.ghost_button_style(status)),
+                .style(move |_, status| theme.subtle_button_style(status)),
         ]
         .spacing(SPACE_2)
         .align_y(Alignment::Center);
 
         let body: Element<'a, Message> = if filtered.is_empty() {
-            container(
-                column![
-                    icon_svg(Icon::Search, 24.0, theme.text_muted),
-                    text("Nenhum comando ou item encontrado.")
-                        .size(13)
-                        .color(theme.text_muted),
-                ]
-                .spacing(SPACE_2)
-                .align_x(Alignment::Center),
+            empty_placeholder(
+                Icon::Search,
+                "Nenhum resultado encontrado",
+                "Tente outro termo ou digite > nova tarefa / > novo evento.",
+                None,
+                theme,
             )
-            .padding(SPACE_4)
-            .width(Length::Fill)
-            .into()
         } else {
-            let mut list = column![].spacing(SPACE_2);
+            let mut list = column![].spacing(4.0);
             for (idx, cmd) in filtered.iter().enumerate() {
                 let is_selected = idx == self.selected_index;
-                let row_content = row![
+                let mut row_content = row![
                     icon_svg(cmd.icon, 16.0, theme.accent),
                     column![
                         text(cmd.label.clone()).size(14).color(theme.text_primary),
@@ -300,22 +297,24 @@ impl CommandPaletteState {
                     ]
                     .spacing(2.0)
                     .width(Length::Fill),
-                    text(cmd.shortcut.unwrap_or(""))
-                        .size(11)
-                        .color(theme.text_muted),
                 ]
                 .spacing(SPACE_3)
                 .align_y(Alignment::Center);
 
+                if let Some(shortcut) = cmd.shortcut.filter(|s| !s.is_empty()) {
+                    row_content = row_content.push(kbd_hint(shortcut, theme));
+                }
+
                 let item_btn = button(row_content)
                     .on_press(map_msg(PaletteMessage::ExecuteIndex(idx)))
                     .width(Length::Fill)
-                    .padding(SPACE_2)
+                    .padding([SPACE_2, SPACE_3])
                     .style(move |_, status| {
-                        let mut style = theme.ghost_button_style(status);
+                        let mut style = theme.subtle_button_style(status);
                         if is_selected {
                             style.background = Some(theme.accent_subtle.into());
                             style.border.color = theme.accent;
+                            style.border.width = 1.0;
                         }
                         style
                     });
@@ -324,31 +323,29 @@ impl CommandPaletteState {
             scrollable(list).height(Length::Fixed(320.0)).into()
         };
 
-        let modal = card(
+        let footer = row![
+            kbd_hint("Enter", theme),
+            text("executar").size(11).color(theme.text_muted),
+            kbd_hint("Esc", theme),
+            text("fechar").size(11).color(theme.text_muted),
+            kbd_hint("Ctrl+K", theme),
+            text("alternar").size(11).color(theme.text_muted),
+        ]
+        .spacing(SPACE_2)
+        .align_y(Alignment::Center);
+
+        modal_surface(
             column![
                 header,
+                hairline_divider(theme),
                 body,
-                row![
-                    text("Enter executa · Esc fecha · Ctrl+K alterna")
-                        .size(11)
-                        .color(theme.text_muted),
-                ]
+                hairline_divider(theme),
+                footer
             ]
             .spacing(SPACE_3),
+            620.0,
             theme,
         )
-        .width(Length::Fixed(600.0));
-
-        container(modal)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(48.0)
-            .align_x(Alignment::Center)
-            .style(|_| container::Style {
-                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.45).into()),
-                ..container::Style::default()
-            })
-            .into()
     }
 }
 

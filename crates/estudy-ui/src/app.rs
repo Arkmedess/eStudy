@@ -2,7 +2,9 @@
 
 use chrono::Timelike;
 use estudy_domain::{CalendarViewMode, ClockPort};
-use estudy_ui_kit::widgets::{card, icon_svg, section_header};
+use estudy_ui_kit::widgets::{
+    banner_toast, card, empty_placeholder, hairline_divider, icon_svg, kbd_hint, section_header,
+};
 use estudy_ui_kit::{
     CosmeticLoadout, EstudyTheme, Icon, SPACE_2, SPACE_3, SPACE_4, SPACE_6, TOPBAR_HEIGHT,
     ThemeMode, ThemePreset,
@@ -40,6 +42,8 @@ pub enum AppMessage {
     CycleThemePreset,
     /// Alterna entre modo claro e escuro.
     ToggleThemeMode,
+    /// Fecha o banner de status transitório.
+    DismissBanner,
     /// Mensagem destinada à Barra de Comando (`Ctrl+K`).
     Palette(PaletteMessage),
     /// Mensagem destinada à fatia Home.
@@ -181,6 +185,9 @@ impl EstudyApp {
             }
             AppMessage::ToggleThemeMode => {
                 self.loadout.theme_mode = self.loadout.theme_mode.toggle();
+            }
+            AppMessage::DismissBanner => {
+                self.status_banner = None;
             }
             AppMessage::Palette(msg) => self.handle_palette_message(msg),
             AppMessage::Home(msg) => self.handle_home_message(msg),
@@ -435,19 +442,20 @@ impl EstudyApp {
         )
         .on_press(AppMessage::Navigate(AppRoute::Home))
         .padding([SPACE_2, SPACE_3])
-        .style(move |_, status| theme.ghost_button_style(status));
+        .style(move |_, status| theme.subtle_button_style(status));
 
         let cmd_btn = button(
             row![
                 icon_svg(Icon::Search, 14.0, theme.text_muted),
-                text("Ctrl+K").size(12).color(theme.text_muted),
+                text("Buscar").size(12).color(theme.text_muted),
+                kbd_hint("Ctrl+K", theme),
             ]
             .spacing(SPACE_2)
             .align_y(Alignment::Center),
         )
         .on_press(AppMessage::Palette(PaletteMessage::Toggle))
-        .padding([SPACE_2, SPACE_3])
-        .style(move |_, status| theme.ghost_button_style(status));
+        .padding([4.0, SPACE_3])
+        .style(move |_, status| theme.pill_button_style(false, status));
 
         let mode_icon = match self.loadout.theme_mode {
             ThemeMode::Light => Icon::Moon,
@@ -466,11 +474,11 @@ impl EstudyApp {
             )
             .on_press(AppMessage::QuickFocusShortcut)
             .padding([SPACE_2, SPACE_3])
-            .style(move |_, status| theme.ghost_button_style(status)),
+            .style(move |_, status| theme.subtle_button_style(status)),
             button(icon_svg(Icon::Bell, 15.0, theme.text_primary))
                 .on_press(AppMessage::ToggleNotifications)
                 .padding(SPACE_2)
-                .style(move |_, status| theme.ghost_button_style(status)),
+                .style(move |_, status| theme.subtle_button_style(status)),
             button(
                 row![
                     icon_svg(Icon::Palette, 14.0, theme.accent),
@@ -483,11 +491,11 @@ impl EstudyApp {
             )
             .on_press(AppMessage::CycleThemePreset)
             .padding([SPACE_2, SPACE_3])
-            .style(move |_, status| theme.ghost_button_style(status)),
+            .style(move |_, status| theme.subtle_button_style(status)),
             button(icon_svg(mode_icon, 15.0, theme.text_primary))
                 .on_press(AppMessage::ToggleThemeMode)
                 .padding(SPACE_2)
-                .style(move |_, status| theme.ghost_button_style(status)),
+                .style(move |_, status| theme.subtle_button_style(status)),
             button(
                 row![
                     icon_svg(Icon::LayoutGrid, 14.0, theme.accent),
@@ -499,7 +507,7 @@ impl EstudyApp {
             )
             .on_press(AppMessage::ToggleModulesMenu)
             .padding([SPACE_2, SPACE_3])
-            .style(move |_, status| theme.ghost_button_style(status)),
+            .style(move |_, status| theme.subtle_button_style(status)),
         ]
         .spacing(SPACE_2)
         .align_y(Alignment::Center);
@@ -523,14 +531,12 @@ impl EstudyApp {
 
     fn view_route_body(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
         let banner: Option<Element<'_, AppMessage>> = self.status_banner.as_ref().map(|msg| {
-            container(
-                row![
-                    icon_svg(Icon::Info, 14.0, theme.accent),
-                    text(msg).size(12).color(theme.text_primary),
-                ]
-                .spacing(SPACE_2)
-                .align_y(Alignment::Center),
-            )
+            container(banner_toast(
+                Icon::Info,
+                msg,
+                Some(AppMessage::DismissBanner),
+                theme,
+            ))
             .padding([SPACE_2, SPACE_6])
             .width(Length::Fill)
             .into()
@@ -580,23 +586,30 @@ fn view_notifications_popover<'a>(theme: EstudyTheme) -> Element<'a, AppMessage>
     let close_btn = button(icon_svg(Icon::X, 14.0, theme.text_muted))
         .on_press(AppMessage::CloseOverlays)
         .padding(4.0)
-        .style(move |_, status| theme.ghost_button_style(status));
+        .style(move |_, status| theme.subtle_button_style(status));
 
     let popover = card(
         column![
             row![
                 section_header(Icon::Trophy, "Notificações e Conquistas", theme),
-                container(close_btn).align_x(Alignment::End).width(Length::Fill),
+                container(close_btn)
+                    .align_x(Alignment::End)
+                    .width(Length::Fill),
             ]
             .align_y(Alignment::Center),
-            text("Nenhuma conquista pendente. Continue seu bloco de estudos para desbloquear novas medalhas.")
-                .size(12)
-                .color(theme.text_muted),
+            hairline_divider(theme),
+            empty_placeholder(
+                Icon::Trophy,
+                "Tudo em dia por aqui",
+                "Continue seus blocos de foco para desbloquear novas medalhas.",
+                None,
+                theme,
+            ),
         ]
         .spacing(SPACE_3),
         theme,
     )
-    .width(Length::Fixed(320.0));
+    .width(Length::Fixed(340.0));
 
     container(popover)
         .width(Length::Fill)
@@ -648,7 +661,7 @@ fn view_modules_popover<'a>(active: AppRoute, theme: EstudyTheme) -> Element<'a,
                 if is_active {
                     theme.primary_button_style(status)
                 } else {
-                    theme.ghost_button_style(status)
+                    theme.subtle_button_style(status)
                 }
             }),
         );

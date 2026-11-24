@@ -2,8 +2,13 @@
 
 use chrono::{Datelike, Duration, Months, NaiveDate};
 use estudy_domain::{CalendarOccurrence, CalendarViewMode, Project, RecurrenceRule, Task};
-use estudy_ui_kit::widgets::{card, icon_svg, panel, section_header, status_badge};
-use estudy_ui_kit::{EstudyTheme, Icon, SPACE_1, SPACE_2, SPACE_3, SPACE_4};
+use estudy_ui_kit::widgets::{
+    card, color_dot, empty_placeholder, hairline_divider, icon_svg, panel, pill_chip,
+    section_header, segmented_switch, soft_surface, status_badge,
+};
+use estudy_ui_kit::{
+    EstudyTheme, Icon, RADIUS_CONTROL, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3, SPACE_4,
+};
 use iced::widget::{button, column, container, row, scrollable, text, text_input};
 use iced::{Alignment, Border, Element, Length};
 
@@ -159,27 +164,18 @@ fn view_tag_filter_list<'a, Message: Clone + 'a>(
     let mut tags_row = column![].spacing(SPACE_1);
     for tag in state.available_tags() {
         let active = state.active_tag_filter.as_deref() == Some(tag.as_str());
-        tags_row = tags_row.push(
-            button(text(format!("#{tag}")).size(11).color(if active {
-                theme.on_accent
-            } else {
-                theme.text_primary
-            }))
-            .on_press(map_msg(CalendarMessage::ToggleTagFilter(if active {
+        tags_row = tags_row.push(pill_chip(
+            format!("#{tag}"),
+            Some(theme.accent),
+            None,
+            active,
+            map_msg(CalendarMessage::ToggleTagFilter(if active {
                 None
             } else {
                 Some(tag)
-            })))
-            .width(Length::Fill)
-            .padding([3.0, 8.0])
-            .style(move |_, status| {
-                if active {
-                    theme.primary_button_style(status)
-                } else {
-                    theme.ghost_button_style(status)
-                }
-            }),
-        );
+            })),
+            theme,
+        ));
     }
     tags_row.into()
 }
@@ -191,7 +187,7 @@ fn view_calendar_main<'a, Message: Clone + 'a>(
     theme: EstudyTheme,
     map_msg: impl Fn(CalendarMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
-    let toolbar = view_calendar_toolbar(state, theme, &map_msg);
+    let toolbar = view_calendar_toolbar(state, theme, map_msg.clone());
     let occurrences = state.visible_occurrences(tasks);
 
     let mut content = column![toolbar].spacing(SPACE_3);
@@ -218,38 +214,34 @@ fn view_calendar_main<'a, Message: Clone + 'a>(
 fn view_calendar_toolbar<'a, Message: Clone + 'a>(
     state: &'a CalendarState,
     theme: EstudyTheme,
-    map_msg: &impl Fn(CalendarMessage) -> Message,
+    map_msg: impl Fn(CalendarMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
-    let mut modes = row![].spacing(SPACE_1);
-    for mode in CalendarViewMode::ALL {
-        let active = mode == state.view_mode;
-        modes = modes.push(
-            button(text(mode.label()).size(12).color(if active {
-                theme.on_accent
-            } else {
-                theme.text_primary
-            }))
-            .on_press(map_msg(CalendarMessage::SetViewMode(mode)))
-            .padding([SPACE_1, SPACE_2])
-            .style(move |_, status| {
-                if active {
-                    theme.primary_button_style(status)
-                } else {
-                    theme.ghost_button_style(status)
-                }
-            }),
-        );
-    }
+    const VIEW_MODES: [(CalendarViewMode, &str); 4] = [
+        (CalendarViewMode::Year, "Ano"),
+        (CalendarViewMode::Month, "Mês"),
+        (CalendarViewMode::Week, "Semana"),
+        (CalendarViewMode::Day, "Dia"),
+    ];
+
+    let modes = segmented_switch(
+        &VIEW_MODES,
+        state.view_mode,
+        {
+            let map_msg = map_msg.clone();
+            move |mode| map_msg(CalendarMessage::SetViewMode(mode))
+        },
+        theme,
+    );
 
     let nav = row![
         button(icon_svg(Icon::PanelLeft, 15.0, theme.text_primary))
             .on_press(map_msg(CalendarMessage::ToggleSidebar))
             .padding(SPACE_2)
-            .style(move |_, status| theme.ghost_button_style(status)),
+            .style(move |_, status| theme.subtle_button_style(status)),
         button(icon_svg(Icon::ChevronLeft, 14.0, theme.text_primary))
             .on_press(map_msg(CalendarMessage::ShiftPeriod(-1)))
             .padding(SPACE_1)
-            .style(move |_, status| theme.ghost_button_style(status)),
+            .style(move |_, status| theme.subtle_button_style(status)),
         text(format!(
             "{:02}/{}",
             state.cursor_date.month(),
@@ -260,22 +252,19 @@ fn view_calendar_toolbar<'a, Message: Clone + 'a>(
         button(icon_svg(Icon::ChevronRight, 14.0, theme.text_primary))
             .on_press(map_msg(CalendarMessage::ShiftPeriod(1)))
             .padding(SPACE_1)
-            .style(move |_, status| theme.ghost_button_style(status)),
+            .style(move |_, status| theme.subtle_button_style(status)),
     ]
     .spacing(SPACE_2)
     .align_y(Alignment::Center);
 
-    let today_btn = button(
-        row![
-            icon_svg(Icon::Clock, 14.0, theme.on_accent),
-            text("Timeline Hoje").size(12).color(theme.on_accent),
-        ]
-        .spacing(SPACE_1)
-        .align_y(Alignment::Center),
-    )
-    .on_press(map_msg(CalendarMessage::OpenTodayDrawer))
-    .padding([SPACE_1, SPACE_3])
-    .style(move |_, status| theme.primary_button_style(status));
+    let today_btn = pill_chip(
+        "Timeline Hoje",
+        None,
+        Some(Icon::Clock),
+        true,
+        map_msg(CalendarMessage::OpenTodayDrawer),
+        theme,
+    );
 
     row![
         nav,
@@ -431,40 +420,29 @@ fn view_month_grid<'a, Message: Clone + 'a>(
         cells.push(NaiveDate::from_ymd_opt(first.year(), first.month(), day));
     }
 
-    let mut grid = column![].spacing(SPACE_2);
+    let weekdays = ["SEG", "TER", "QUA", "QUI", "SEX", "SÁB", "DOM"];
+    let mut weekday_header = row![].spacing(SPACE_2).width(Length::Fill);
+    for day_name in weekdays {
+        weekday_header = weekday_header.push(
+            container(text(day_name).size(11).color(theme.text_muted))
+                .width(Length::Fill)
+                .padding([0.0, SPACE_1]),
+        );
+    }
+
+    let mut grid = column![weekday_header, hairline_divider(theme)].spacing(SPACE_2);
     for week in cells.chunks(7) {
         let mut week_row = row![].spacing(SPACE_2).width(Length::Fill);
         for cell in week {
             if let Some(date) = cell {
-                let day_items: Vec<&CalendarOccurrence> = occurrences
-                    .iter()
-                    .filter(|occ| occ.date == *date)
-                    .take(3)
-                    .collect();
-
-                let mut list =
-                    column![
-                        text(format!("{:02}", date.day()))
-                            .size(12)
-                            .color(if *date == today {
-                                theme.accent
-                            } else {
-                                theme.text_primary
-                            })
-                    ]
-                    .spacing(2.0);
-                for occ in day_items {
-                    list = list.push(view_occurrence_pill(occ, theme));
-                }
-
-                week_row = week_row.push(
-                    button(list)
-                        .on_press(map_msg(CalendarMessage::SelectDate(*date)))
-                        .width(Length::Fill)
-                        .height(Length::Fixed(96.0))
-                        .padding(SPACE_1)
-                        .style(move |_, status| theme.ghost_button_style(status)),
-                );
+                week_row = week_row.push(view_month_day_cell(
+                    state,
+                    *date,
+                    today,
+                    occurrences,
+                    theme,
+                    map_msg,
+                ));
             } else {
                 week_row = week_row.push(container(text("")).width(Length::Fill));
             }
@@ -472,7 +450,96 @@ fn view_month_grid<'a, Message: Clone + 'a>(
         grid = grid.push(week_row);
     }
 
-    scrollable(grid).height(Length::Fill).into()
+    let legend = row![
+        color_dot(theme.accent),
+        text("Evento / Hoje").size(11).color(theme.text_muted),
+        color_dot(theme.warning),
+        text("Prazo de tarefa").size(11).color(theme.text_muted),
+        color_dot(theme.success),
+        text("Concluída").size(11).color(theme.text_muted),
+    ]
+    .spacing(SPACE_2)
+    .align_y(Alignment::Center);
+
+    column![scrollable(grid).height(Length::Fill), legend]
+        .spacing(SPACE_2)
+        .height(Length::Fill)
+        .into()
+}
+
+fn view_month_day_cell<'a, Message: Clone + 'a>(
+    state: &'a CalendarState,
+    date: NaiveDate,
+    today: NaiveDate,
+    occurrences: &[CalendarOccurrence],
+    theme: EstudyTheme,
+    map_msg: &impl Fn(CalendarMessage) -> Message,
+) -> Element<'a, Message> {
+    let day_items: Vec<&CalendarOccurrence> = occurrences
+        .iter()
+        .filter(|occ| occ.date == date)
+        .take(3)
+        .collect();
+
+    let is_today = date == today;
+    let is_selected = date == state.cursor_date;
+    let day_badge: Element<'a, Message> = if is_today {
+        container(
+            text(format!("{:02}", date.day()))
+                .size(11)
+                .color(theme.on_accent),
+        )
+        .padding([2.0, 7.0])
+        .style(move |_| container::Style {
+            background: Some(theme.accent.into()),
+            border: Border {
+                radius: RADIUS_PILL.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .into()
+    } else {
+        text(format!("{:02}", date.day()))
+            .size(12)
+            .color(theme.text_primary)
+            .into()
+    };
+
+    let mut list = column![day_badge].spacing(3.0);
+    for occ in day_items {
+        list = list.push(view_occurrence_pill(occ, theme));
+    }
+
+    button(list)
+        .on_press(map_msg(CalendarMessage::SelectDate(date)))
+        .width(Length::Fill)
+        .height(Length::Fixed(96.0))
+        .padding(SPACE_2)
+        .style(move |_, status| button::Style {
+            background: Some(
+                if is_selected {
+                    theme.accent_subtle
+                } else if matches!(status, button::Status::Hovered) {
+                    theme.card_hover
+                } else {
+                    theme.card
+                }
+                .into(),
+            ),
+            text_color: theme.text_primary,
+            border: Border {
+                color: if is_selected || is_today {
+                    theme.accent
+                } else {
+                    theme.border_subtle
+                },
+                width: 1.0,
+                radius: RADIUS_CONTROL.into(),
+            },
+            ..button::Style::default()
+        })
+        .into()
 }
 
 fn view_week_columns<'a, Message: Clone + 'a>(
@@ -490,11 +557,15 @@ fn view_week_columns<'a, Message: Clone + 'a>(
 
     for offset in 0..7_i64 {
         let date = start + Duration::days(offset);
+        let is_today = date == today;
+        let day_items: Vec<&CalendarOccurrence> =
+            occurrences.iter().filter(|occ| occ.date == date).collect();
+
         let mut day_col = column![
             button(
                 text(format!("{:02}/{:02}", date.day(), date.month()))
                     .size(13)
-                    .color(if date == today {
+                    .color(if is_today {
                         theme.accent
                     } else {
                         theme.text_primary
@@ -502,18 +573,26 @@ fn view_week_columns<'a, Message: Clone + 'a>(
             )
             .on_press(map_msg(CalendarMessage::SelectDate(date)))
             .padding(SPACE_1)
-            .style(move |_, status| theme.ghost_button_style(status))
+            .style(move |_, status| theme.subtle_button_style(status)),
+            hairline_divider(theme),
         ]
         .spacing(SPACE_2);
 
-        for occ in occurrences.iter().filter(|occ| occ.date == date) {
-            day_col = day_col.push(view_occurrence_pill(occ, theme));
+        if day_items.is_empty() {
+            day_col = day_col.push(text("Dia livre por aqui").size(11).color(theme.text_muted));
+        } else {
+            for occ in day_items {
+                day_col = day_col.push(view_occurrence_pill(occ, theme));
+            }
         }
-        cols = cols.push(
-            panel(scrollable(day_col), theme)
-                .width(Length::Fill)
-                .height(Length::Fill),
-        );
+
+        let col_card = if is_today {
+            card(scrollable(day_col), theme)
+        } else {
+            soft_surface(scrollable(day_col), theme)
+        };
+
+        cols = cols.push(col_card.width(Length::Fill).height(Length::Fill));
     }
 
     cols.into()
@@ -530,13 +609,13 @@ fn view_day_agenda<'a, Message: 'a>(
         .collect();
 
     if day_items.is_empty() {
-        return card(
-            text("Nenhum evento ou prazo neste dia.")
-                .size(13)
-                .color(theme.text_muted),
+        return empty_placeholder(
+            Icon::Calendar,
+            "Dia livre na agenda",
+            "Nenhum evento ou prazo marcado para esta data.",
+            None,
             theme,
-        )
-        .into();
+        );
     }
 
     let mut list = column![].spacing(SPACE_2);

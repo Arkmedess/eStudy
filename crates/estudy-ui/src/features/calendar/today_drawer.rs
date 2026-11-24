@@ -2,10 +2,13 @@
 
 use chrono::{DateTime, Utc};
 use estudy_domain::{CalendarEvent, Task, TimelineSlot, TodayTimeline, build_today_timeline};
-use estudy_ui_kit::widgets::{card, icon_svg, panel, section_header, status_badge};
-use estudy_ui_kit::{EstudyTheme, Icon, RADIUS_CONTROL, SPACE_1, SPACE_2, SPACE_3, SPACE_4};
+use estudy_ui_kit::widgets::{
+    card, drawer_backdrop, hairline_divider, icon_svg, panel, section_header, soft_surface,
+    status_badge,
+};
+use estudy_ui_kit::{EstudyTheme, Icon, SPACE_1, SPACE_2, SPACE_3};
 use iced::widget::{button, column, container, row, scrollable, text};
-use iced::{Alignment, Border, Color, Element, Length};
+use iced::{Alignment, Element, Length};
 
 use super::state::CalendarMessage;
 
@@ -24,7 +27,7 @@ pub fn view_today_drawer<'a, Message: Clone + 'a>(
             button(icon_svg(Icon::X, 15.0, theme.text_muted))
                 .on_press(map_msg(CalendarMessage::CloseTodayDrawer))
                 .padding(4.0)
-                .style(move |_, status| theme.ghost_button_style(status)),
+                .style(move |_, status| theme.subtle_button_style(status)),
         )
         .align_x(Alignment::End)
         .width(Length::Fill),
@@ -34,33 +37,20 @@ pub fn view_today_drawer<'a, Message: Clone + 'a>(
     let unscheduled_section = view_unscheduled_section(&timeline, theme);
     let timeline_section = view_timeline_slots(&timeline, theme);
 
-    let drawer_box = container(
-        scrollable(column![header, unscheduled_section, timeline_section].spacing(SPACE_3))
-            .height(Length::Fill),
+    drawer_backdrop(
+        scrollable(
+            column![
+                header,
+                hairline_divider(theme),
+                unscheduled_section,
+                timeline_section,
+            ]
+            .spacing(SPACE_3),
+        )
+        .height(Length::Fill),
+        420.0,
+        theme,
     )
-    .width(Length::Fixed(420.0))
-    .height(Length::Fill)
-    .padding(SPACE_4)
-    .style(move |_| container::Style {
-        background: Some(theme.card.into()),
-        text_color: Some(theme.text_primary),
-        border: Border {
-            color: theme.border_subtle,
-            width: 1.0,
-            radius: RADIUS_CONTROL.into(),
-        },
-        ..container::Style::default()
-    });
-
-    container(drawer_box)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Alignment::End)
-        .style(|_| container::Style {
-            background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.35).into()),
-            ..container::Style::default()
-        })
-        .into()
 }
 
 fn view_unscheduled_section<'a, Message: 'a>(
@@ -92,8 +82,8 @@ fn view_unscheduled_section<'a, Message: 'a>(
         }
     }
 
-    panel(
-        column![text("Sem horário").size(12).color(theme.text_muted), items,].spacing(SPACE_2),
+    soft_surface(
+        column![text("Sem horário").size(12).color(theme.text_muted), items].spacing(SPACE_2),
         theme,
     )
     .into()

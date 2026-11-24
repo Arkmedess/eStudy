@@ -25,7 +25,8 @@ O eStudy evita barras laterais pesadas de navegação. A interface prioriza resp
   - `Inter` — textos e controles da interface.
   - `JetBrains Mono` (`tabular-nums`) — temporizadores, contadores e badges numéricos para evitar tremulação durante atualizações.
   - `Source Serif 4` — restrita a citações de livros e destaques editoriais.
-- **Espaçamento e raios:** grade base de `4px` e raios concêntricos (`12px` para painéis/cartões, `8px` para botões/inputs, `6px` para chips e badges).
+- **Espaçamento e raios:** grade base de `4px` (`SPACE_1` a `SPACE_8`) e raios concêntricos suaves (`16px` para cartões principais e modais, `12px` para painéis internos, `10px` para controles e entradas de texto, `6px` para chips de atalho e `999px` para pílulas/filtros).
+- **Primitivos do UI Kit (`crates/estudy-ui-kit`):** cartões elevados e tonais (`card`, `tonal_card`), superfícies macias (`soft_surface`), divisores finos (`hairline_divider`), seletores em cápsula (`segmented_switch`, `pill_chip`), barras de progresso (`progress_track`), métricas (`metric_stat`), estados vazios (`empty_placeholder`), banners (`banner_toast`), atalhos (`kbd_hint`) e envelopes padrão de drawer/modal (`drawer_backdrop`, `modal_surface`).
 - **Iconografia:** catálogo único com 87 ícones Lucide em SVG vetorial (zero emojis na interface).
 - **Sprites 2D do Jardim e Pets:** arquivos WebP artesanais (`128×128px`, 2 a 4 frames leves por estado), carregados sob demanda apenas para o que está visível na tela (teto de 1,5 MB de RAM) e animados a 4–6 FPS somente quando a janela está ativa.
 - **Ícones de Conquistas:** arquivos WebP `64×64px` em 4 raridades (*Bronze, Prata, Ouro, Platina*).

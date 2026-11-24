@@ -1,6 +1,6 @@
 //! Tokens visuais, os 5 presets WCAG 2.2 AA e slots cosméticos do eStudy.
 
-use iced::widget::{button, container};
+use iced::widget::{button, container, text_input};
 use iced::{Border, Color, Shadow, Vector};
 
 /// Unidade base de espaçamento (`4px`).
@@ -11,18 +11,26 @@ pub const SPACE_2: f32 = 8.0;
 pub const SPACE_3: f32 = 12.0;
 /// Padding interno de painéis/cartões (`16px`).
 pub const SPACE_4: f32 = 16.0;
+/// Padding generoso para cartões principais (`20px`).
+pub const SPACE_5: f32 = 20.0;
 /// Margem entre colunas principais (`24px`).
 pub const SPACE_6: f32 = 24.0;
+/// Espaçamento amplo de seção (`32px`).
+pub const SPACE_8: f32 = 32.0;
 
 /// Altura fixa da barra superior discreta (`48px`).
 pub const TOPBAR_HEIGHT: f32 = 48.0;
 
-/// Raio externo de cartões e painéis (`12px`).
+/// Raio amplo e orgânico de cartões principais (`16px`).
+pub const RADIUS_CARD: f32 = 16.0;
+/// Raio externo de painéis e gavetas (`12px`).
 pub const RADIUS_PANEL: f32 = 12.0;
-/// Raio de controles internos (`8px`, mantendo concentricidade).
-pub const RADIUS_CONTROL: f32 = 8.0;
-/// Raio de badges e chips (`6px`).
+/// Raio de controles internos (`10px`, mantendo concentricidade).
+pub const RADIUS_CONTROL: f32 = 10.0;
+/// Raio de badges e chips compactos (`6px`).
 pub const RADIUS_CHIP: f32 = 6.0;
+/// Raio completo para pílulas, tags e seletores segmentados (`999px`).
+pub const RADIUS_PILL: f32 = 999.0;
 
 /// Presets oficiais de tema do eStudy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -192,6 +200,8 @@ pub struct EstudyTheme {
     pub mode: ThemeMode,
     /// Fundo base da janela.
     pub bg: Color,
+    /// Superfície suave intermediária para bandejas, linhas alternadas e apoios leves.
+    pub surface_soft: Color,
     /// Superfície de painéis e barra lateral.
     pub panel: Color,
     /// Superfície de cartões elevados.
@@ -251,25 +261,27 @@ impl EstudyTheme {
             ThemeMode::Light => Self::make(
                 ThemePreset::OlivaOrganico,
                 mode,
-                rgb(0xf7_f5_f0),
+                rgb(0xf7_f4_ee),
+                rgb(0xf2_ee_e6),
                 rgb(0xef_ec_e4),
                 rgb(0xff_ff_ff),
                 rgb(0xf4_f1_ea),
-                rgba(0x1f_26_20, 0.12),
+                rgba(0x1f_26_20, 0.08),
                 rgb(0x1c_22_1d),
                 rgb(0x4e_58_4f),
                 rgb(0x4a_5d_4e),
                 rgb(0xff_ff_ff),
-                rgba(0x4a_5d_4e, 0.12),
+                rgba(0x4a_5d_4e, 0.11),
             ),
             ThemeMode::Dark => Self::make(
                 ThemePreset::OlivaOrganico,
                 mode,
                 rgb(0x12_14_11),
+                rgb(0x16_19_15),
                 rgb(0x1a_1d_18),
                 rgb(0x21_25_1f),
                 rgb(0x28_2d_25),
-                rgba(0xff_ff_ff, 0.10),
+                rgba(0xff_ff_ff, 0.09),
                 rgb(0xec_f0_ea),
                 rgb(0xab_b5_a8),
                 rgb(0xa3_b8_99),
@@ -285,10 +297,11 @@ impl EstudyTheme {
                 ThemePreset::EstudyMenta,
                 mode,
                 rgb(0x07_07_09),
+                rgb(0x0c_0d_11),
                 rgb(0x0f_10_15),
                 rgb(0x13_14_1a),
                 rgb(0x1a_1c_24),
-                rgba(0xff_ff_ff, 0.10),
+                rgba(0xff_ff_ff, 0.09),
                 rgb(0xf1_f5_f9),
                 rgb(0x9c_a8_b8),
                 rgb(0x86_ef_ac),
@@ -299,10 +312,11 @@ impl EstudyTheme {
                 ThemePreset::EstudyMenta,
                 mode,
                 rgb(0xf8_fa_fc),
+                rgb(0xf4_f7_fb),
                 rgb(0xf1_f5_f9),
                 rgb(0xff_ff_ff),
                 rgb(0xf4_f8_fb),
-                rgba(0x0f_17_2a, 0.11),
+                rgba(0x0f_17_2a, 0.08),
                 rgb(0x0f_17_2a),
                 rgb(0x47_55_69),
                 rgb(0x15_80_3d),
@@ -318,10 +332,11 @@ impl EstudyTheme {
                 ThemePreset::CyberMinimalist,
                 mode,
                 rgb(0x04_07_11),
+                rgb(0x07_0c_18),
                 rgb(0x0a_10_20),
                 rgb(0x0f_17_2a),
                 rgb(0x16_20_38),
-                rgba(0xe2_e8_f0, 0.11),
+                rgba(0xe2_e8_f0, 0.10),
                 rgb(0xf1_f5_f9),
                 rgb(0x94_a3_b8),
                 rgb(0x38_bd_f8),
@@ -332,10 +347,11 @@ impl EstudyTheme {
                 ThemePreset::CyberMinimalist,
                 mode,
                 rgb(0xf0_f7_ff),
+                rgb(0xe8_f3_fe),
                 rgb(0xe0_f0_fe),
                 rgb(0xff_ff_ff),
                 rgb(0xf2_f8_ff),
-                rgba(0x0c_4a_6e, 0.13),
+                rgba(0x0c_4a_6e, 0.09),
                 rgb(0x0c_1a_2e),
                 rgb(0x33_4e_68),
                 rgb(0x03_69_a1),
@@ -351,10 +367,11 @@ impl EstudyTheme {
                 ThemePreset::SolarAmber,
                 mode,
                 rgb(0x0e_0b_08),
+                rgb(0x13_10_0b),
                 rgb(0x17_13_0e),
                 rgb(0x1f_1a_13),
                 rgb(0x28_21_18),
-                rgba(0xfe_f3_c7, 0.11),
+                rgba(0xfe_f3_c7, 0.10),
                 rgb(0xfc_f6_ec),
                 rgb(0xc2_b2_9b),
                 rgb(0xfb_bf_24),
@@ -365,10 +382,11 @@ impl EstudyTheme {
                 ThemePreset::SolarAmber,
                 mode,
                 rgb(0xfe_f9_ee),
+                rgb(0xfe_f6_db),
                 rgb(0xfe_f3_c7),
                 rgb(0xff_ff_ff),
                 rgb(0xfe_f7_e5),
-                rgba(0x78_35_0f, 0.14),
+                rgba(0x78_35_0f, 0.10),
                 rgb(0x29_1d_0e),
                 rgb(0x5c_43_24),
                 rgb(0x92_40_0e),
@@ -384,10 +402,11 @@ impl EstudyTheme {
                 ThemePreset::VelvetSakura,
                 mode,
                 rgb(0x0d_08_0b),
+                rgb(0x12_0b_0f),
                 rgb(0x16_0e_13),
                 rgb(0x1d_13_19),
                 rgb(0x26_19_21),
-                rgba(0xfc_e7_f3, 0.11),
+                rgba(0xfc_e7_f3, 0.10),
                 rgb(0xfb_f1_f6),
                 rgb(0xc4_a1_b4),
                 rgb(0xf4_72_b6),
@@ -398,10 +417,11 @@ impl EstudyTheme {
                 ThemePreset::VelvetSakura,
                 mode,
                 rgb(0xfa_f7_f5),
+                rgb(0xfd_f0_f7),
                 rgb(0xfc_e7_f3),
                 rgb(0xff_ff_ff),
                 rgb(0xfd_f2_f8),
-                rgba(0x83_18_43, 0.13),
+                rgba(0x83_18_43, 0.09),
                 rgb(0x28_10_1c),
                 rgb(0x63_33_4b),
                 rgb(0xbe_18_5d),
@@ -416,6 +436,7 @@ impl EstudyTheme {
         preset: ThemePreset,
         mode: ThemeMode,
         bg: Color,
+        surface_soft: Color,
         panel: Color,
         card: Color,
         card_hover: Color,
@@ -435,6 +456,7 @@ impl EstudyTheme {
             preset,
             mode,
             bg,
+            surface_soft,
             panel,
             card,
             card_hover,
@@ -466,7 +488,7 @@ impl EstudyTheme {
         }
     }
 
-    /// Estilo de cartão elevado principal.
+    /// Estilo de cartão elevado principal com cantos suaves e sombra difusa.
     #[must_use]
     pub fn card_style(&self) -> container::Style {
         container::Style {
@@ -475,20 +497,139 @@ impl EstudyTheme {
             border: Border {
                 color: self.border_subtle,
                 width: 1.0,
-                radius: RADIUS_PANEL.into(),
+                radius: RADIUS_CARD.into(),
             },
             shadow: Shadow {
                 color: Color {
                     a: match self.mode {
-                        ThemeMode::Light => 0.05,
-                        ThemeMode::Dark => 0.20,
+                        ThemeMode::Light => 0.04,
+                        ThemeMode::Dark => 0.24,
                     },
                     ..Color::BLACK
                 },
-                offset: Vector::new(0.0, 2.0),
-                blur_radius: 8.0,
+                offset: Vector::new(0.0, 4.0),
+                blur_radius: 14.0,
             },
             snap: true,
+        }
+    }
+
+    /// Estilo de cartão focal tonal usando o acento ativo com contraste AA+.
+    #[must_use]
+    pub fn tonal_card_style(&self) -> container::Style {
+        container::Style {
+            background: Some(self.accent.into()),
+            text_color: Some(self.on_accent),
+            border: Border {
+                color: Color::TRANSPARENT,
+                width: 0.0,
+                radius: RADIUS_CARD.into(),
+            },
+            shadow: Shadow {
+                color: Color {
+                    a: match self.mode {
+                        ThemeMode::Light => 0.08,
+                        ThemeMode::Dark => 0.26,
+                    },
+                    ..Color::BLACK
+                },
+                offset: Vector::new(0.0, 4.0),
+                blur_radius: 16.0,
+            },
+            snap: true,
+        }
+    }
+
+    /// Superfície suave sem sombra para blocos internos ou linhas alternadas.
+    #[must_use]
+    pub fn soft_surface_style(&self) -> container::Style {
+        container::Style {
+            background: Some(self.surface_soft.into()),
+            text_color: Some(self.text_primary),
+            border: Border {
+                color: self.border_subtle,
+                width: 1.0,
+                radius: RADIUS_PANEL.into(),
+            },
+            shadow: Shadow::default(),
+            snap: true,
+        }
+    }
+
+    /// Bandeja em cápsula para agrupar seletores segmentados (`Semana | Calendário`).
+    #[must_use]
+    pub fn pill_tray_style(&self) -> container::Style {
+        container::Style {
+            background: Some(self.surface_soft.into()),
+            text_color: Some(self.text_primary),
+            border: Border {
+                color: self.border_subtle,
+                width: 1.0,
+                radius: RADIUS_PILL.into(),
+            },
+            shadow: Shadow::default(),
+            snap: true,
+        }
+    }
+
+    /// Superfície padrão de gavetas deslizantes laterais.
+    #[must_use]
+    pub fn drawer_surface_style(&self) -> container::Style {
+        container::Style {
+            background: Some(self.card.into()),
+            text_color: Some(self.text_primary),
+            border: Border {
+                color: self.border_subtle,
+                width: 1.0,
+                radius: RADIUS_CARD.into(),
+            },
+            shadow: Shadow {
+                color: Color {
+                    a: match self.mode {
+                        ThemeMode::Light => 0.12,
+                        ThemeMode::Dark => 0.38,
+                    },
+                    ..Color::BLACK
+                },
+                offset: Vector::new(-4.0, 0.0),
+                blur_radius: 24.0,
+            },
+            snap: true,
+        }
+    }
+
+    /// Superfície elevada para modais e Barra de Comando (`Ctrl+K`).
+    #[must_use]
+    pub fn modal_surface_style(&self) -> container::Style {
+        container::Style {
+            background: Some(self.card.into()),
+            text_color: Some(self.text_primary),
+            border: Border {
+                color: self.border_subtle,
+                width: 1.0,
+                radius: RADIUS_CARD.into(),
+            },
+            shadow: Shadow {
+                color: Color {
+                    a: match self.mode {
+                        ThemeMode::Light => 0.14,
+                        ThemeMode::Dark => 0.44,
+                    },
+                    ..Color::BLACK
+                },
+                offset: Vector::new(0.0, 10.0),
+                blur_radius: 28.0,
+            },
+            snap: true,
+        }
+    }
+
+    /// Hairline sutil de 1px para dividir listas e seções internas sem ruído.
+    #[must_use]
+    pub fn divider_style(&self) -> container::Style {
+        container::Style {
+            background: Some(self.border_subtle.into()),
+            ..container::Style::default()
         }
     }
 
@@ -575,6 +716,91 @@ impl EstudyTheme {
             },
             shadow: Shadow::default(),
             snap: true,
+        }
+    }
+
+    /// Estilo para botão leve sem borda em repouso (ideal para topbar e itens de lista).
+    #[must_use]
+    pub fn subtle_button_style(&self, status: button::Status) -> button::Style {
+        let bg = match status {
+            button::Status::Hovered => Some(self.card_hover.into()),
+            button::Status::Pressed => Some(self.accent_subtle.into()),
+            _ => None,
+        };
+        button::Style {
+            background: bg,
+            text_color: self.text_primary,
+            border: Border {
+                color: Color::TRANSPARENT,
+                width: 0.0,
+                radius: RADIUS_CONTROL.into(),
+            },
+            shadow: Shadow::default(),
+            snap: true,
+        }
+    }
+
+    /// Estilo para botão em cápsula (`RADIUS_PILL`) de filtros, tags e seletores segmentados.
+    #[must_use]
+    pub fn pill_button_style(&self, active: bool, status: button::Status) -> button::Style {
+        if active {
+            let bg = match status {
+                button::Status::Hovered | button::Status::Pressed => Color {
+                    a: 0.92,
+                    ..self.accent
+                },
+                _ => self.accent,
+            };
+            button::Style {
+                background: Some(bg.into()),
+                text_color: self.on_accent,
+                border: Border {
+                    color: Color::TRANSPARENT,
+                    width: 0.0,
+                    radius: RADIUS_PILL.into(),
+                },
+                shadow: Shadow::default(),
+                snap: true,
+            }
+        } else {
+            let bg = match status {
+                button::Status::Hovered => Some(self.card_hover.into()),
+                button::Status::Pressed => Some(self.accent_subtle.into()),
+                _ => Some(self.card.into()),
+            };
+            button::Style {
+                background: bg,
+                text_color: self.text_primary,
+                border: Border {
+                    color: self.border_subtle,
+                    width: 1.0,
+                    radius: RADIUS_PILL.into(),
+                },
+                shadow: Shadow::default(),
+                snap: true,
+            }
+        }
+    }
+
+    /// Estilo suave para campos de texto alinhados ao tema ativo.
+    #[must_use]
+    pub fn soft_input_style(&self, status: text_input::Status) -> text_input::Style {
+        let border_color = match status {
+            text_input::Status::Focused { .. } => self.accent,
+            text_input::Status::Hovered => self.text_muted,
+            text_input::Status::Active | text_input::Status::Disabled => self.border_subtle,
+        };
+        text_input::Style {
+            background: self.surface_soft.into(),
+            border: Border {
+                color: border_color,
+                width: 1.0,
+                radius: RADIUS_CONTROL.into(),
+            },
+            icon: self.text_muted,
+            placeholder: self.text_muted,
+            value: self.text_primary,
+            selection: self.accent_subtle,
         }
     }
 }

@@ -2,9 +2,11 @@
 
 #![allow(clippy::expect_used)]
 
+use estudy_ui_kit::widgets::clamp_progress;
 use estudy_ui_kit::{
-    BoardFrameStyle, CosmeticLoadout, EstudyTheme, HeatmapData, Icon, ThemeMode, ThemePreset,
-    contrast_ratio, meets_wcag_aa,
+    BoardFrameStyle, CosmeticLoadout, EstudyTheme, HeatmapData, Icon, RADIUS_CARD, RADIUS_CHIP,
+    RADIUS_CONTROL, RADIUS_PANEL, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_5,
+    SPACE_6, SPACE_8, ThemeMode, ThemePreset, contrast_ratio, meets_wcag_aa,
 };
 use iced::Color;
 use std::collections::HashSet;
@@ -77,4 +79,30 @@ fn should_map_heatmap_counts_to_five_intensity_levels() {
     assert_eq!(HeatmapData::intensity_level(3), 2);
     assert_eq!(HeatmapData::intensity_level(6), 3);
     assert_eq!(HeatmapData::intensity_level(12), 4);
+}
+
+#[test]
+fn should_expose_soft_geometry_tonal_surfaces_and_clamped_progress() {
+    const {
+        assert!(SPACE_1 < SPACE_2 && SPACE_2 < SPACE_3 && SPACE_3 < SPACE_4);
+        assert!(SPACE_4 < SPACE_5 && SPACE_5 < SPACE_6 && SPACE_6 < SPACE_8);
+        assert!(RADIUS_CARD >= RADIUS_PANEL);
+        assert!(RADIUS_PANEL >= RADIUS_CONTROL);
+        assert!(RADIUS_CONTROL >= RADIUS_CHIP);
+        assert!(RADIUS_PILL >= 900.0);
+    }
+
+    assert!((clamp_progress(-0.2) - 0.0).abs() < f32::EPSILON);
+    assert!((clamp_progress(0.45) - 0.45).abs() < f32::EPSILON);
+    assert!((clamp_progress(1.8) - 1.0).abs() < f32::EPSILON);
+
+    for preset in ThemePreset::ALL {
+        for mode in ThemeMode::ALL {
+            let theme = EstudyTheme::resolve(preset, mode);
+            let tonal = theme.tonal_card_style();
+            assert!(tonal.background.is_some());
+            assert!(meets_wcag_aa(theme.text_primary, theme.surface_soft));
+            assert!(theme.pill_tray_style().background.is_some());
+        }
+    }
 }

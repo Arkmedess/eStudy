@@ -4,12 +4,13 @@ use chrono::{Datelike, NaiveDate};
 use estudy_domain::{
     EisenhowerQuadrant, MAX_TASK_CHECKLIST_ITEMS, ProjectFramework, Task, TaskPriority, TaskStatus,
 };
-use estudy_ui_kit::widgets::{card, icon_svg, panel, section_header, status_badge};
-use estudy_ui_kit::{EstudyTheme, Icon, RADIUS_CONTROL, SPACE_1, SPACE_2, SPACE_3, SPACE_4};
-use iced::widget::{
-    button, column, container, progress_bar, row, scrollable, stack, text, text_input,
+use estudy_ui_kit::widgets::{
+    card, drawer_backdrop, hairline_divider, icon_svg, panel, pill_chip, progress_track,
+    section_header, segmented_switch, soft_surface, status_badge,
 };
-use iced::{Alignment, Border, Color, Element, Length};
+use estudy_ui_kit::{EstudyTheme, Icon, SPACE_1, SPACE_2, SPACE_3, SPACE_4};
+use iced::widget::{button, column, container, row, scrollable, stack, text, text_input};
+use iced::{Alignment, Border, Element, Length};
 use std::collections::BTreeMap;
 
 use super::state::{DescriptionTab, ProjectsMessage, ProjectsState, TaskDrawerState};
@@ -217,7 +218,7 @@ fn view_main_workspace<'a, Message: Clone + 'a>(
     theme: EstudyTheme,
     map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
-    let toolbar = view_top_toolbar(state, theme, &map_msg);
+    let toolbar = view_top_toolbar(state, theme, map_msg.clone());
     let events_and_tags = view_events_and_tags_strip(state, theme, &map_msg);
 
     let quick_add = row![
@@ -228,7 +229,8 @@ fn view_main_workspace<'a, Message: Clone + 'a>(
             })
             .on_submit(map_msg(ProjectsMessage::CreateQuickTask))
             .padding(SPACE_2)
-            .size(13),
+            .size(13)
+            .style(move |_, status| theme.soft_input_style(status)),
         button(
             row![
                 icon_svg(Icon::Plus, 14.0, theme.on_accent),
@@ -239,7 +241,7 @@ fn view_main_workspace<'a, Message: Clone + 'a>(
         )
         .on_press(map_msg(ProjectsMessage::CreateQuickTask))
         .padding([SPACE_2, SPACE_3])
-        .style(move |_, status| theme.primary_button_style(status)),
+        .style(move |_, status| theme.pill_button_style(true, status)),
     ]
     .spacing(SPACE_2)
     .align_y(Alignment::Center);
@@ -266,41 +268,33 @@ fn view_main_workspace<'a, Message: Clone + 'a>(
 fn view_top_toolbar<'a, Message: Clone + 'a>(
     state: &'a ProjectsState,
     theme: EstudyTheme,
-    map_msg: &impl Fn(ProjectsMessage) -> Message,
+    map_msg: impl Fn(ProjectsMessage) -> Message + 'a,
 ) -> Element<'a, Message> {
+    const FRAMEWORKS: [(ProjectFramework, &str); 4] = [
+        (ProjectFramework::Kanban, "Kanban"),
+        (ProjectFramework::Milestones, "Marcos"),
+        (ProjectFramework::Eisenhower, "Eisenhower"),
+        (ProjectFramework::WeeklyFocus, "Foco"),
+    ];
+
     let title = state
         .active_project()
         .map_or("Todos os Projetos", |proj| proj.title.as_str());
-    let active_fw = state.active_framework();
-
-    let mut fw_chips = row![].spacing(SPACE_1);
-    for fw in ProjectFramework::ALL {
-        let active = fw == active_fw;
-        fw_chips = fw_chips.push(
-            button(text(fw.label()).size(11).color(if active {
-                theme.on_accent
-            } else {
-                theme.text_primary
-            }))
-            .on_press(map_msg(ProjectsMessage::SwitchFramework(fw)))
-            .padding([SPACE_1, SPACE_2])
-            .style(move |_, status| {
-                if active {
-                    theme.primary_button_style(status)
-                } else {
-                    theme.ghost_button_style(status)
-                }
-            }),
-        );
-    }
+    let sidebar_msg = map_msg(ProjectsMessage::ToggleSidebar);
+    let fw_switch = segmented_switch(
+        &FRAMEWORKS,
+        state.active_framework(),
+        move |fw| map_msg(ProjectsMessage::SwitchFramework(fw)),
+        theme,
+    );
 
     row![
         button(icon_svg(Icon::PanelLeft, 15.0, theme.text_primary))
-            .on_press(map_msg(ProjectsMessage::ToggleSidebar))
+            .on_press(sidebar_msg)
             .padding(SPACE_2)
-            .style(move |_, status| theme.ghost_button_style(status)),
+            .style(move |_, status| theme.subtle_button_style(status)),
         text(title).size(18).color(theme.text_primary),
-        container(fw_chips)
+        container(fw_switch)
             .align_x(Alignment::End)
             .width(Length::Fill),
     ]
@@ -326,44 +320,32 @@ fn view_events_and_tags_strip<'a, Message: Clone + 'a>(
 
     let mut tags_row = row![icon_svg(Icon::Tag, 13.0, theme.text_muted)].spacing(SPACE_1);
     let all_active = state.active_tag_filter.is_none();
-    tags_row = tags_row.push(
-        button(text("Todas").size(11).color(if all_active {
-            theme.on_accent
-        } else {
-            theme.text_primary
-        }))
-        .on_press(map_msg(ProjectsMessage::ToggleTagFilter(None)))
-        .padding([3.0, 8.0])
-        .style(move |_, status| {
-            if all_active {
-                theme.primary_button_style(status)
-            } else {
-                theme.ghost_button_style(status)
-            }
-        }),
-    );
+    tags_row = tags_row.push(pill_chip(
+        "Todas",
+        None,
+        None,
+        all_active,
+        map_msg(ProjectsMessage::ToggleTagFilter(None)),
+        theme,
+    ));
 
     for tag in state.available_tags() {
         let active = state.active_tag_filter.as_deref() == Some(tag.as_str());
-        tags_row = tags_row.push(
-            button(text(format!("#{tag}")).size(11).color(if active {
-                theme.on_accent
-            } else {
-                theme.text_primary
-            }))
-            .on_press(map_msg(ProjectsMessage::ToggleTagFilter(Some(tag))))
-            .padding([3.0, 8.0])
-            .style(move |_, status| {
-                if active {
-                    theme.primary_button_style(status)
-                } else {
-                    theme.ghost_button_style(status)
-                }
-            }),
-        );
+        tags_row = tags_row.push(pill_chip(
+            format!("#{tag}"),
+            Some(theme.accent),
+            None,
+            active,
+            map_msg(ProjectsMessage::ToggleTagFilter(Some(tag))),
+            theme,
+        ));
     }
 
-    panel(column![events_row, tags_row].spacing(SPACE_2), theme).into()
+    soft_surface(
+        column![events_row, hairline_divider(theme), tags_row].spacing(SPACE_2),
+        theme,
+    )
+    .into()
 }
 
 fn view_kanban_board<'a, Message: Clone + 'a>(
@@ -463,7 +445,7 @@ fn view_milestones_board<'a, Message: Clone + 'a>(
                     .align_x(Alignment::End)
                     .width(Length::Fill),
                 ],
-                progress_bar(0.0..=1.0, ratio),
+                progress_track(ratio, theme.accent, theme),
                 cards,
             ]
             .spacing(SPACE_2),
@@ -589,12 +571,12 @@ fn view_task_card<'a, Message: Clone + 'a>(
     };
 
     let open_btn = button(
-        column![text(&task.title).size(13).color(theme.text_primary), meta,].spacing(SPACE_1),
+        column![text(&task.title).size(13).color(theme.text_primary), meta].spacing(SPACE_1),
     )
     .on_press(map_msg(ProjectsMessage::OpenTaskDrawer(task.id.clone())))
     .width(Length::Fill)
     .padding(SPACE_2)
-    .style(move |_, status| theme.ghost_button_style(status));
+    .style(move |_, status| theme.subtle_button_style(status));
 
     let mut card_col = column![open_btn].spacing(SPACE_1);
     if let Some(target_status) = next_status {
@@ -614,7 +596,7 @@ fn view_task_card<'a, Message: Clone + 'a>(
                 target_status,
             )))
             .padding([3.0, 6.0])
-            .style(move |_, status| theme.ghost_button_style(status)),
+            .style(move |_, status| theme.subtle_button_style(status)),
         );
     }
 
@@ -634,35 +616,20 @@ fn view_task_drawer<'a, Message: Clone + 'a>(
     let markdown = view_drawer_markdown(drawer, task, theme, map_msg.clone());
     let tags = view_drawer_tags(drawer, task, theme, map_msg);
 
-    let mut body = column![header, schedule, checklist, markdown, tags].spacing(SPACE_3);
+    let mut body = column![
+        header,
+        hairline_divider(theme),
+        schedule,
+        checklist,
+        markdown,
+        tags,
+    ]
+    .spacing(SPACE_3);
     if let Some(notice) = &drawer.notice {
         body = body.push(status_badge(notice, theme.warning, theme));
     }
 
-    let drawer_box = container(scrollable(body).height(Length::Fill))
-        .width(Length::Fixed(420.0))
-        .height(Length::Fill)
-        .padding(SPACE_4)
-        .style(move |_| container::Style {
-            background: Some(theme.card.into()),
-            text_color: Some(theme.text_primary),
-            border: Border {
-                color: theme.border_subtle,
-                width: 1.0,
-                radius: RADIUS_CONTROL.into(),
-            },
-            ..container::Style::default()
-        });
-
-    container(drawer_box)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_x(Alignment::End)
-        .style(|_| container::Style {
-            background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.35).into()),
-            ..container::Style::default()
-        })
-        .into()
+    drawer_backdrop(scrollable(body).height(Length::Fill), 420.0, theme)
 }
 
 fn view_drawer_header<'a, Message: Clone + 'a>(
@@ -889,27 +856,26 @@ fn view_drawer_markdown<'a, Message: Clone + 'a>(
     theme: EstudyTheme,
     map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
-    let tabs = row![
-        tab_button(
-            "Escrever",
-            drawer.description_tab == DescriptionTab::Write,
-            map_msg(ProjectsMessage::SetDescriptionTab(DescriptionTab::Write)),
-            theme
-        ),
-        tab_button(
-            "Visualizar",
-            drawer.description_tab == DescriptionTab::Preview,
-            map_msg(ProjectsMessage::SetDescriptionTab(DescriptionTab::Preview)),
-            theme
-        ),
-    ]
-    .spacing(SPACE_1);
+    const TABS: [(DescriptionTab, &str); 2] = [
+        (DescriptionTab::Write, "Escrever"),
+        (DescriptionTab::Preview, "Visualizar"),
+    ];
+    let tabs = segmented_switch(
+        &TABS,
+        drawer.description_tab,
+        {
+            let map_msg = map_msg.clone();
+            move |tab| map_msg(ProjectsMessage::SetDescriptionTab(tab))
+        },
+        theme,
+    );
 
     let body: Element<'a, Message> = match drawer.description_tab {
         DescriptionTab::Write => text_input("Descrição em Markdown...", &task.description_md)
             .on_input(move |val| map_msg(ProjectsMessage::DrawerDescriptionChanged(val)))
             .padding(SPACE_2)
             .size(12)
+            .style(move |_, status| theme.soft_input_style(status))
             .into(),
         DescriptionTab::Preview => render_markdown_preview(&task.description_md, theme),
     };
@@ -1012,29 +978,6 @@ fn sidebar_project_btn<'a, Message: Clone + 'a>(
     .on_press(on_press)
     .width(Length::Fill)
     .padding([SPACE_1, SPACE_2])
-    .style(move |_, status| {
-        if active {
-            theme.primary_button_style(status)
-        } else {
-            theme.ghost_button_style(status)
-        }
-    })
-    .into()
-}
-
-fn tab_button<'a, Message: Clone + 'a>(
-    label: &'a str,
-    active: bool,
-    on_press: Message,
-    theme: EstudyTheme,
-) -> Element<'a, Message> {
-    button(text(label).size(11).color(if active {
-        theme.on_accent
-    } else {
-        theme.text_primary
-    }))
-    .on_press(on_press)
-    .padding([3.0, 8.0])
     .style(move |_, status| {
         if active {
             theme.primary_button_style(status)
