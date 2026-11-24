@@ -36,6 +36,15 @@ pub enum DomainEvent {
         /// Identificador do evento.
         event_id: EntityId,
     },
+    /// Sessão de foco registrada em `study_sessions` após commit.
+    FocusSessionLogged {
+        /// Identificador da sessão.
+        session_id: EntityId,
+        /// Minutos focados registrados.
+        duration_minutes: u32,
+        /// Moedas creditadas após respeito ao teto diário.
+        awarded_coins: i64,
+    },
 }
 
 /// Porta para publicação desacoplada de eventos após a confirmação da persistência.

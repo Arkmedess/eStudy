@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/estudy-domain",
     "crates/estudy-storage",
+    "crates/estudy-audio",
     "crates/estudy-ui-kit",
     "crates/estudy-ui",
     "apps/estudy-preview",
@@ -10,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT"
@@ -19,6 +20,7 @@ description = "Sistema local-first de produtividade, projetos, estudos e leitura
 
 [workspace.dependencies]
 chrono = { version = "0.4.45", features = ["serde"] }
+cpal = "0.18.2"
 directories = "6.0.0"
 hex = "0.4.3"
 hmac = "0.13.0"

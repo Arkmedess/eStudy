@@ -1,7 +1,7 @@
 //! Shell principal do aplicativo **eStudy** (MVU puro desacoplado de janela).
 
 use chrono::Timelike;
-use estudy_domain::{CalendarViewMode, ClockPort};
+use estudy_domain::{CalendarViewMode, ClockPort, PomodoroPreset};
 use estudy_ui_kit::widgets::{
     banner_toast, card, empty_placeholder, hairline_divider, icon_svg, kbd_hint, section_header,
 };
@@ -18,6 +18,7 @@ use crate::command_palette::{
     AppRoute, CommandPaletteState, PaletteAction, PaletteCommand, PaletteMessage,
 };
 use crate::features::calendar::{CalendarMessage, CalendarState, view_calendar, view_today_drawer};
+use crate::features::focus::{FocusMessage, FocusState, view_focus_mode};
 use crate::features::home::{
     HomeDashboardData, HomeLoadState, HomeMessage, MoodViewMode, view_home,
 };
@@ -52,6 +53,8 @@ pub enum AppMessage {
     Projects(ProjectsMessage),
     /// Mensagem destinada à fatia Calendário e Drawer "Hoje".
     Calendar(CalendarMessage),
+    /// Mensagem destinada ao módulo Pomodoro, Modo Foco e Áudio DSP.
+    Focus(FocusMessage),
 }
 
 /// Estado completo da interface do eStudy (testável sem janela nem GPU).
@@ -73,6 +76,8 @@ pub struct EstudyApp {
     pub projects_state: ProjectsState,
     /// Estado da fatia Calendário Unificado e Drawer "Hoje".
     pub calendar_state: CalendarState,
+    /// Estado da fatia Pomodoro, Modo Foco e Áudio DSP.
+    pub focus_state: FocusState,
     /// Mensagem de feedback transitório da ação mais recente.
     pub status_banner: Option<String>,
 }
@@ -117,8 +122,15 @@ impl EstudyApp {
             home_state,
             projects_state,
             calendar_state,
+            focus_state: FocusState::default(),
             status_banner: None,
         }
+    }
+
+    /// Informa se o temporizador Pomodoro precisa de pulso periódico de 1 segundo.
+    #[must_use]
+    pub const fn is_focus_ticking(&self) -> bool {
+        self.focus_state.needs_ticker()
     }
 
     /// Retorna o tema `Iced` resolvido para o loadout atual.
@@ -153,7 +165,9 @@ impl EstudyApp {
             AppMessage::QuickFocusShortcut => {
                 self.notifications_open = false;
                 self.modules_menu_open = false;
-                self.status_banner = Some("Bloco de foco de 25 min preparado.".to_string());
+                self.focus_state.fullscreen_active = true;
+                self.status_banner =
+                    Some("Modo Foco aberto (Esc para sair da tela cheia).".to_string());
             }
             AppMessage::ToggleNotifications => {
                 self.notifications_open = !self.notifications_open;
@@ -170,6 +184,7 @@ impl EstudyApp {
                 self.projects_state.flush_deferred();
                 self.projects_state.drawer = None;
                 self.calendar_state.today_drawer_open = false;
+                self.focus_state.fullscreen_active = false;
             }
             AppMessage::ToggleContextSidebar => match self.route {
                 AppRoute::Projects => self
@@ -199,6 +214,10 @@ impl EstudyApp {
                 let now = self.clock.now_utc();
                 self.calendar_state.update(msg, now);
             }
+            AppMessage::Focus(msg) => {
+                let now = self.clock.now_utc();
+                self.focus_state.update(msg, now);
+            }
         }
     }
 
@@ -214,6 +233,19 @@ impl EstudyApp {
     #[must_use]
     pub fn view(&self) -> Element<'_, AppMessage> {
         let theme = self.active_theme();
+        if self.focus_state.fullscreen_active {
+            let pet_label = match &self.home_state {
+                HomeLoadState::Ready(data) => data.pet_badge_label.as_str(),
+                _ => "Mochi",
+            };
+            let focus_screen =
+                view_focus_mode(&self.focus_state, pet_label, theme, AppMessage::Focus);
+            if self.palette.is_open {
+                return stack![focus_screen, self.palette.view(theme, AppMessage::Palette)].into();
+            }
+            return focus_screen;
+        }
+
         let topbar = self.view_topbar(theme);
         let body = self.view_route_body(theme);
 
@@ -343,6 +375,24 @@ impl EstudyApp {
                 self.loadout.theme_mode = self.loadout.theme_mode.toggle();
             }
             PaletteAction::StartFocus(minutes) => {
+                let preset = match minutes {
+                    50 => PomodoroPreset::Deep50_10,
+                    15 => PomodoroPreset::Sprint15_3,
+                    25 => PomodoroPreset::Classic25_5,
+                    other => PomodoroPreset::Custom {
+                        focus_minutes: u32::from(other),
+                        break_minutes: u32::from((other / 5).max(1)),
+                    },
+                };
+                self.focus_state.update(FocusMessage::Reset, now);
+                self.focus_state.update(
+                    FocusMessage::OpenWithTarget {
+                        title: format!("Bloco de foco ({minutes} min)"),
+                        task_id: None,
+                        preset,
+                    },
+                    now,
+                );
                 self.status_banner = Some(format!("Bloco de foco de {minutes} min preparado."));
             }
             PaletteAction::QuickCreateTask(Some(title)) => {
@@ -422,6 +472,22 @@ impl EstudyApp {
                 self.calendar_state.view_mode = CalendarViewMode::Week;
             }
             HomeMessage::StartFocusForPin(pin_id) => {
+                let pin_title = match &self.home_state {
+                    HomeLoadState::Ready(data) => data
+                        .focus_items
+                        .iter()
+                        .find(|pin| pin.id == pin_id)
+                        .map_or_else(|| "Item em foco".to_string(), |pin| pin.title.clone()),
+                    _ => "Item em foco".to_string(),
+                };
+                self.focus_state.update(
+                    FocusMessage::OpenWithTarget {
+                        title: pin_title,
+                        task_id: None,
+                        preset: PomodoroPreset::Classic25_5,
+                    },
+                    self.clock.now_utc(),
+                );
                 self.status_banner = Some(format!("Foco vinculado ao item {pin_id}."));
             }
             HomeMessage::RetryLoad | HomeMessage::SeedStarterWorkspace => {

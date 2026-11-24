@@ -7,6 +7,7 @@
 pub mod calendar_repo;
 pub mod connection;
 pub mod error;
+pub mod focus_repo;
 pub mod migrations;
 pub mod paths;
 pub mod project_repo;
@@ -17,6 +18,7 @@ pub mod wallet_repo;
 pub use calendar_repo::SqliteCalendarRepository;
 pub use connection::{open_connection, open_in_memory};
 pub use error::StorageError;
+pub use focus_repo::{RecordedFocusOutcome, SqliteFocusRepository, StoredFocusSession};
 pub use migrations::{LATEST_SCHEMA_VERSION, MigrationReport, apply_migrations};
 pub use paths::AppPaths;
 pub use project_repo::SqliteProjectRepository;

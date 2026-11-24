@@ -8,6 +8,7 @@ pub mod calendar;
 pub mod clock;
 pub mod error;
 pub mod events;
+pub mod focus;
 pub mod ids;
 pub mod projects;
 pub mod wallet;
@@ -19,6 +20,10 @@ pub use calendar::{
 pub use clock::{ClockPort, FixedClock, SystemClock};
 pub use error::DomainError;
 pub use events::{DomainEvent, EventBusPort, InMemoryEventBus};
+pub use focus::{
+    DspTrack, FocusModality, FocusPhase, FocusSessionDraft, MINIMUM_REWARDABLE_FOCUS_MINUTES,
+    PomodoroPreset, PomodoroTimer, ValidatedFocusSession, calculate_focus_coins,
+};
 pub use ids::EntityId;
 pub use projects::{
     EisenhowerQuadrant, MAX_FOCUS_PINNED_TASKS, MAX_TASK_CHECKLIST_ITEMS, Project,

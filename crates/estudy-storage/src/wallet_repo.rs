@@ -21,15 +21,33 @@ impl SqliteWalletRepository {
         draft: WalletEntryDraft,
         event_bus: Option<&dyn EventBusPort>,
     ) -> Result<SignedWalletEntry, StorageError> {
-        let key = WalletChain::derive_profile_key(app_secret, profile_id)?;
         let tx = conn.transaction()?;
+        let (signed, inserted) = Self::record_entry_in_tx(&tx, app_secret, profile_id, draft)?;
+        tx.commit()?;
 
-        if let Some(existing) = find_by_idempotency_key(&tx, &draft.idempotency_key)? {
-            tx.commit()?;
-            return Ok(existing);
+        if inserted && let Some(bus) = event_bus {
+            bus.publish(DomainEvent::WalletEntryRecorded {
+                profile_id: profile_id.clone(),
+                seq: signed.seq,
+                delta: signed.amount,
+            });
         }
 
-        let entries = load_entries_for_profile(&tx, profile_id)?;
+        Ok(signed)
+    }
+
+    pub(crate) fn record_entry_in_tx(
+        tx: &Transaction<'_>,
+        app_secret: &[u8],
+        profile_id: &EntityId,
+        draft: WalletEntryDraft,
+    ) -> Result<(SignedWalletEntry, bool), StorageError> {
+        let key = WalletChain::derive_profile_key(app_secret, profile_id)?;
+        if let Some(existing) = find_by_idempotency_key(tx, &draft.idempotency_key)? {
+            return Ok((existing, false));
+        }
+
+        let entries = load_entries_for_profile(tx, profile_id)?;
         let current_balance = WalletChain::verify_chain(&key, &entries)?;
         let signed = WalletChain::sign_next_entry(&key, entries.last(), current_balance, draft)?;
 
@@ -52,17 +70,7 @@ impl SqliteWalletRepository {
                 created_at,
             ],
         )?;
-        tx.commit()?;
-
-        if let Some(bus) = event_bus {
-            bus.publish(DomainEvent::WalletEntryRecorded {
-                profile_id: profile_id.clone(),
-                seq: signed.seq,
-                delta: signed.amount,
-            });
-        }
-
-        Ok(signed)
+        Ok((signed, true))
     }
 
     /// Carrega todas as entradas do perfil em ordem e verifica a cadeia HMAC-SHA256.

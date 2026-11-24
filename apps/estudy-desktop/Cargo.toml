@@ -9,6 +9,7 @@ description = "Binário desktop do eStudy conectando domínio, persistência SQL
 
 [dependencies]
 chrono.workspace = true
+estudy-audio = { path = "../../crates/estudy-audio" }
 estudy-domain = { path = "../../crates/estudy-domain" }
 estudy-storage = { path = "../../crates/estudy-storage" }
 estudy-ui = { path = "../../crates/estudy-ui" }

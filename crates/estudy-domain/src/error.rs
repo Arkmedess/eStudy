@@ -77,4 +77,8 @@ pub enum DomainError {
         /// Fim informado.
         ends_at: String,
     },
+
+    /// Regra violada ao validar ou registrar uma sessão Pomodoro/Foco.
+    #[error("sessão de foco inválida: {0}")]
+    InvalidFocusSession(String),
 }
