@@ -8,6 +8,16 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
+## [0.4.1] - 2026-11-23
+
+### Corrigido e Aprimorado
+- Removidas sombras desfocadas (`Shadow`) das superfícies em `estudy-ui-kit` que geravam artefatos visuais e lentidão de redesenho no backend padrão `tiny-skia`, substituindo por hierarquia tonal limpa e borda de `1px`.
+- Centralizado e dimensionado dinamicamente o `HeatmapGrid` (365 dias com células arredondadas), respeitando redimensionamento da janela.
+- Melhorada a apresentação da Home: removida a saudação duplicada no cartão de perfil, eliminados botões repetidos no cartão "Hoje", colunas equilibradas em largura máxima (`1360px`) e contador regressivo ativo na barra superior (`Focar · MM:SS`).
+- Ajustado `apps/estudy-preview` para preencher a largura com equilíbrio e exibir os 87 ícones SVG em grade de 9 colunas sem recortes laterais.
+
+---
+
 ## [0.4.0] - 2026-11-23
 
 ### Aprimorado
@@ -78,7 +88,8 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
-[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/Arkmedess/eStudy/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Arkmedess/eStudy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Arkmedess/eStudy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Arkmedess/eStudy/compare/v0.1.1...v0.2.0

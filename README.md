@@ -2,7 +2,7 @@
 
 Aplicativo desktop local-first de produtividade pessoal em **Rust**, reunindo **Home Pessoal, Projetos, Calendário Unificado/Hoje, Estudos, Estante de Leituras, Foco/Áudio e Gamificação leve** em um único binário nativo com consumo alvo de **20–45 MB de RAM** (atualmente ~33 MiB em repouso no backend padrão `tiny-skia`).
 
-> **Status atual:** `v0.4.0` — Home em 3 colunas com 5 presets WCAG 2.2 AA, Projetos (Kanban + Marcos/Eisenhower/Foco Semanal + Drawer da tarefa), Calendário Unificado (`Ano/Mês/Semana/Dia`), Drawer "Hoje" com janelas livres, Busca Global (`Ctrl+K` com `FTS5`), Pomodoro em tela cheia com áudio procedural DSP (`-16 LUFS`), logs estruturados em JSON e validação contínua.
+> **Status atual:** `v0.4.1` — Home em 3 colunas com 5 presets WCAG 2.2 AA, Projetos (Kanban + Marcos/Eisenhower/Foco Semanal + Drawer da tarefa), Calendário Unificado (`Ano/Mês/Semana/Dia`), Drawer "Hoje" com janelas livres, Busca Global (`Ctrl+K` com `FTS5`), Pomodoro em tela cheia com áudio procedural DSP (`-16 LUFS`), superfícies limpas sem artefatos de sombra e validação contínua.
 
 ---
 
