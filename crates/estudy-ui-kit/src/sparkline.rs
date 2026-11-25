@@ -1,8 +1,9 @@
-//! Gráfico de linha e área suave (*sparkline*) desenhado em `Canvas` leve.
+//! Gráfico de linha e área suave (*sparkline*) desenhado em `Canvas` leve com cache.
 
 use iced::mouse::Cursor;
-use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Stroke};
+use iced::widget::canvas::{self, Canvas, Geometry, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme};
+use std::cell::Cell;
 
 /// Série numérica imutável para renderização em [`SparklineCanvas`].
 #[derive(Debug, Clone, PartialEq)]
@@ -63,7 +64,22 @@ impl SparklineData {
     }
 }
 
-/// Widget `Canvas` de linha + área translúcida com ponto final em destaque.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SparklineRenderKey {
+    values_hash: u64,
+    stroke_rgba: u32,
+    width: u32,
+    height: u32,
+}
+
+/// Estado interno de cache de geometria do [`SparklineCanvas`].
+#[derive(Default)]
+pub struct SparklineCanvasState {
+    cache: canvas::Cache,
+    last_signature: Cell<Option<SparklineRenderKey>>,
+}
+
+/// Widget `Canvas` de linha + área translúcida com ponto final em destaque e cache de geometria.
 #[derive(Debug, Clone)]
 pub struct SparklineCanvas {
     /// Dados da série temporal.
@@ -85,88 +101,117 @@ impl SparklineCanvas {
 }
 
 impl<Message> canvas::Program<Message> for SparklineCanvas {
-    type State = ();
+    type State = SparklineCanvasState;
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn draw(
         &self,
-        _state: &Self::State,
+        state: &Self::State,
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
         _cursor: Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        let width = bounds.width.max(1.0);
-        let height = bounds.height.max(1.0);
-        let pad_x = 4.0_f32;
-        let pad_y = 6.0_f32;
-        let plot_w = (width - pad_x * 2.0).max(1.0);
-        let plot_h = (height - pad_y * 2.0).max(1.0);
+        let signature = SparklineRenderKey {
+            values_hash: hash_values(&self.data.values),
+            stroke_rgba: pack_color(self.stroke_color),
+            width: bounds.width.round().max(0.0) as u32,
+            height: bounds.height.round().max(0.0) as u32,
+        };
+        if state.last_signature.get() != Some(signature) {
+            state.cache.clear();
+            state.last_signature.set(Some(signature));
+        }
 
-        // Guias horizontais discretas (3 linhas).
-        for step in [0.25_f32, 0.5, 0.75] {
-            let y = pad_y + plot_h * step;
-            let guide = Path::line(Point::new(pad_x, y), Point::new(pad_x + plot_w, y));
+        let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
+            let width = bounds.width.max(1.0);
+            let height = bounds.height.max(1.0);
+            let pad_x = 4.0_f32;
+            let pad_y = 6.0_f32;
+            let plot_w = (width - pad_x * 2.0).max(1.0);
+            let plot_h = (height - pad_y * 2.0).max(1.0);
+
+            // Guias horizontais agrupadas em um único path.
+            let guides = Path::new(|builder| {
+                for step in [0.25_f32, 0.5, 0.75] {
+                    let y = pad_y + plot_h * step;
+                    builder.move_to(Point::new(pad_x, y));
+                    builder.line_to(Point::new(pad_x + plot_w, y));
+                }
+            });
             frame.stroke(
-                &guide,
+                &guides,
                 Stroke::default()
                     .with_color(self.grid_color)
                     .with_width(1.0),
             );
-        }
 
-        let normalized = self.data.normalized_points();
-        if normalized.len() < 2 {
-            return vec![frame.into_geometry()];
-        }
-
-        let points: Vec<Point> = normalized
-            .iter()
-            .map(|&(nx, ny)| Point::new(pad_x + nx * plot_w, pad_y + ny * plot_h))
-            .collect();
-
-        // Área preenchida sob a linha.
-        let base_y = pad_y + plot_h;
-        let area = Path::new(|builder| {
-            builder.move_to(Point::new(points[0].x, base_y));
-            for &pt in &points {
-                builder.line_to(pt);
+            let normalized = self.data.normalized_points();
+            if normalized.len() < 2 {
+                return;
             }
-            if let Some(last) = points.last() {
-                builder.line_to(Point::new(last.x, base_y));
-            }
-            builder.close();
-        });
-        frame.fill(&area, self.fill_color);
 
-        // Linha principal.
-        let line = Path::new(|builder| {
-            builder.move_to(points[0]);
-            for &pt in &points[1..] {
-                builder.line_to(pt);
-            }
-        });
-        frame.stroke(
-            &line,
-            Stroke::default()
-                .with_color(self.stroke_color)
-                .with_width(2.0),
-        );
+            let points: Vec<Point> = normalized
+                .iter()
+                .map(|&(nx, ny)| Point::new(pad_x + nx * plot_w, pad_y + ny * plot_h))
+                .collect();
 
-        // Ponto final destacado.
-        if let Some(&last) = points.last() {
-            let halo = Path::circle(last, 5.0);
-            frame.fill(
-                &halo,
-                Color {
-                    a: 0.25,
-                    ..self.stroke_color
-                },
+            let base_y = pad_y + plot_h;
+            let area = Path::new(|builder| {
+                builder.move_to(Point::new(points[0].x, base_y));
+                for &pt in &points {
+                    builder.line_to(pt);
+                }
+                if let Some(last) = points.last() {
+                    builder.line_to(Point::new(last.x, base_y));
+                }
+                builder.close();
+            });
+            frame.fill(&area, self.fill_color);
+
+            let line = Path::new(|builder| {
+                builder.move_to(points[0]);
+                for &pt in &points[1..] {
+                    builder.line_to(pt);
+                }
+            });
+            frame.stroke(
+                &line,
+                Stroke::default()
+                    .with_color(self.stroke_color)
+                    .with_width(2.0),
             );
-            let dot = Path::circle(last, 2.8);
-            frame.fill(&dot, self.stroke_color);
-        }
 
-        vec![frame.into_geometry()]
+            if let Some(&last) = points.last() {
+                frame.fill(
+                    &Path::circle(last, 5.0),
+                    Color {
+                        a: 0.25,
+                        ..self.stroke_color
+                    },
+                );
+                frame.fill(&Path::circle(last, 2.8), self.stroke_color);
+            }
+        });
+
+        vec![geometry]
     }
+}
+
+fn hash_values(values: &[f32]) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for &v in values {
+        hash ^= u64::from(v.to_bits());
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    hash
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn pack_color(color: Color) -> u32 {
+    let red = (color.r.clamp(0.0, 1.0) * 255.0) as u32;
+    let green = (color.g.clamp(0.0, 1.0) * 255.0) as u32;
+    let blue = (color.b.clamp(0.0, 1.0) * 255.0) as u32;
+    let alpha = (color.a.clamp(0.0, 1.0) * 255.0) as u32;
+    (red << 24) | (green << 16) | (blue << 8) | alpha
 }

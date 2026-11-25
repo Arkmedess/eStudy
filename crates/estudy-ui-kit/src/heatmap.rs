@@ -105,23 +105,25 @@ impl<Message> canvas::Program<Message> for HeatmapGrid<'_> {
             let total_h = rows as f32 * cell_size + (rows as f32 - 1.0) * gap;
             let origin_x = ((bounds.width - total_w) * 0.5).max(0.0);
             let origin_y = ((bounds.height - total_h) * 0.5).max(0.0);
-            let corner = (cell_size * 0.24).clamp(1.5, 3.5);
 
-            for (day_idx, &count) in self.data.days.iter().enumerate() {
-                let col = day_idx / rows;
-                let row = day_idx % rows;
-                #[allow(clippy::cast_precision_loss)]
-                let x = origin_x + col as f32 * (cell_size + gap);
-                #[allow(clippy::cast_precision_loss)]
-                let y = origin_y + row as f32 * (cell_size + gap);
-
-                let color = level_color(self.theme, HeatmapData::intensity_level(count));
-                let tile = canvas::Path::rounded_rectangle(
-                    Point::new(x, y),
-                    Size::new(cell_size, cell_size),
-                    corner.into(),
-                );
-                frame.fill(&tile, color);
+            // Agrupa as 365 células em apenas 5 paths retangulares (1 por nível de cor),
+            // reduzindo drasticamente o custo de rasterização em CPU (tiny-skia) durante scroll.
+            for level in 0_u8..=4 {
+                let batch = canvas::Path::new(|builder| {
+                    for (day_idx, &count) in self.data.days.iter().enumerate() {
+                        if HeatmapData::intensity_level(count) != level {
+                            continue;
+                        }
+                        let col = day_idx / rows;
+                        let row = day_idx % rows;
+                        #[allow(clippy::cast_precision_loss)]
+                        let x = origin_x + col as f32 * (cell_size + gap);
+                        #[allow(clippy::cast_precision_loss)]
+                        let y = origin_y + row as f32 * (cell_size + gap);
+                        builder.rectangle(Point::new(x, y), Size::new(cell_size, cell_size));
+                    }
+                });
+                frame.fill(&batch, level_color(self.theme, level));
             }
         });
 

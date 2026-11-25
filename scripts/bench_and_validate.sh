@@ -59,12 +59,16 @@ if [[ "$CI_MODE" == "false" ]] && { [[ -n "${WAYLAND_DISPLAY:-}" ]] || [[ -n "${
     RSS_KB="$(awk '/VmRSS:/ {print $2}' "/proc/$DESKTOP_PID/status")"
     HWM_KB="$(awk '/VmHWM:/ {print $2}' "/proc/$DESKTOP_PID/status")"
     THREADS="$(awk '/Threads:/ {print $2}' "/proc/$DESKTOP_PID/status")"
+    CPU_TICKS="$(awk '{print $14 + $15}' "/proc/$DESKTOP_PID/stat")"
+    CLK_TCK="$(getconf CLK_TCK 2>/dev/null || echo 100)"
+    CPU_MS="$(awk -v t="$CPU_TICKS" -v hz="$CLK_TCK" 'BEGIN {printf "%.0f", (t / hz) * 1000}')"
+    CPU_PCT="$(awk -v ms="$CPU_MS" 'BEGIN {printf "%.1f", (ms / 2000.0) * 100}')"
     kill -TERM "$DESKTOP_PID" 2>/dev/null || true
     wait "$DESKTOP_PID" 2>/dev/null || true
 
     RSS_MIB="$(awk -v kb="$RSS_KB" 'BEGIN {printf "%.2f", kb / 1024}')"
     HWM_MIB="$(awk -v kb="$HWM_KB" 'BEGIN {printf "%.2f", kb / 1024}')"
-    echo "estudy-desktop -> VmRSS: ${RSS_MIB} MiB (${RSS_KB} kB) | VmHWM: ${HWM_MIB} MiB | Threads: ${THREADS}"
+    echo "estudy-desktop -> VmRSS: ${RSS_MIB} MiB (${RSS_KB} kB) | VmHWM: ${HWM_MIB} MiB | CPU(2s): ${CPU_MS} ms (~${CPU_PCT}%) | Threads: ${THREADS}"
 
     if awk -v rss="$RSS_MIB" -v max="$MAX_IDLE_RSS_MIB" 'BEGIN {exit !(rss > max)}'; then
       echo "ERRO: RSS (${RSS_MIB} MiB) excedeu o teto de ${MAX_IDLE_RSS_MIB} MiB."
