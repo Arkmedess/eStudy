@@ -31,9 +31,16 @@ Plano incremental de entregas do **eStudy**. Cada marco entrega um conjunto func
   - Home redesenhada em Painel Bento editorial (Pulso de Foco 14d + Ritmo Anual 365d + Projetos coloridos por categoria) e Gaveta Flutuante "Hoje" com faixa semanal, cápsulas proporcionais e régua `Agora`.
   - Perfil `dev` otimizando dependências de renderização (`tiny-skia` / `cosmic-text`) com `opt-level = 2` para fluidez local.
 
-- **v0.6.0 — Projetos & Tarefas Turbinados, Hábitos, Segundo Cérebro e Financeiro** *(Em andamento)*
+- **v0.6.0 — Projetos por Turnos, Hábitos, Segundo Cérebro, Sidebar Estável e Popups** *(Concluído)*
   - Visão semanal de tarefas por turnos (`Manhã`, `Tarde`, `Noite`), Kanban com cartões tintados, gaveta flutuante da tarefa e disparo direto de foco para o Pomodoro.
-  - Módulo de Hábitos (grade semanal, constância mensal em barras e calendário), Segundo Cérebro (notas, ideias, referências e links integrados ao `FTS5`) e Financeiro pessoal simples.
+  - Módulo de Hábitos (grade semanal, constância mensal em barras e calendário) e Segundo Cérebro (*master-detail* na mesma tela com editor `Visualizar | Escrever`, tipos e tags).
+  - Barra lateral recolhível sem deslocamento de ícones (`220px` <-> `64px`), Popups rápidos (`QuickPopup`) sem trocar de tela e otimização de scroll em CPU (`HeatmapGrid` em batch + cache no `SparklineCanvas`).
+
+- **v0.6.1 — Estudo de Usabilidade, Fluxo Sem Redundâncias, UI Opinativa e Persistência v2** *(Próximo)*
+  - Eliminação de redundâncias de navegação e controles duplicados entre Topbar, Sidebar, Home e módulos (fluxograma único de entrada e ação).
+  - Refinamento visual para romper o aspecto "engessado" (ritmo editorial assimétrico, superfícies táteis leves em `tiny-skia`, ações contextuais inline e micro-popovers sem sair da tela) mantendo teto `< 45 MiB` de RAM.
+  - Bateria de testes automatizados de fluxo de uso (jornadas ponta-a-ponta do usuário em MVU) e migração SQLite v2 (persistência real de Hábitos, Segundo Cérebro, `weekly_turns` e Financeiro).
+  - Especificação completa em [docs/ux-architecture-0.6.1.md](./docs/ux-architecture-0.6.1.md).
 
 - **v0.7.0 — Módulo de Estudos Completo e Estante de Leituras**
   - Ciclo contínuo de matérias com "Matéria da Vez", revisões espaçadas (`1/7/14/30/60d` e FSRS), flashcards *Active Recall*, Caderno de Erros e gráficos analíticos em `Canvas`.

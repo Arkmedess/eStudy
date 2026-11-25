@@ -8,6 +8,24 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
+## [0.6.0] - 2026-11-25
+
+### Adicionado
+- **Módulo de Hábitos** (`estudy-domain/src/habits.rs` e `estudy-ui/src/features/habits/`): grade semanal (`SEG`–`DOM`), criação inline sem sair da tela, resumo "O mês" com percentual global e barras individuais de adesão, além do calendário mensal de constância.
+- **Segundo Cérebro** (`estudy-domain/src/second_brain.rs` e `estudy-ui/src/features/second_brain/`): layout *master-detail* na mesma tela (`7fr` grade de notas + `5fr` editor inline `Visualizar | Escrever`), classificação por tipo (*Nota, Ideia, Referência, Link*), pin, tags e exclusão rápida.
+- **Projetos — Semana por Turnos**: visão de 5 dias úteis distribuídos em `Manhã`, `Tarde` e `Noite` com criação rápida por turno, cartões Kanban tintados por prioridade e botão direto de foco (`Play`) abrindo o Pomodoro com a tarefa vinculada.
+- **Popups de Consulta Rápida (`QuickPopup`)**: leitura de nota, checklist de hábitos do dia e mini-controle de foco acessíveis diretamente da barra superior ou da Home sem trocar de tela (`Esc` fecha).
+
+### Aprimorado
+- **Barra Lateral Estável (`220px` <-> `64px`)**: botão de comprimir/expandir fixo no topo esquerdo (`x = 13px`) e ícones alinhados em slots rígidos (`38x36px`) que não se deslocam ao alternar o estado.
+- **Alinhamento da Home e Ações na Mesma Tela**: cartões do Hero equalizados (`198px`) e faixa inline de *Hábitos de Hoje* (marcação direta) + *Segundo Cérebro* (abertura em popup).
+
+### Otimizado
+- **Fluidez de Scroll em CPU (`tiny-skia`)**: `HeatmapGrid` agrupado em 5 `Path`s retangulares por nível de intensidade (eliminando 1.460 curvas Bézier por frame) e `SparklineCanvas` com `canvas::Cache` por assinatura de dados.
+- `scripts/bench_and_validate.sh` ampliado para medir tempo/percentual de CPU em janela de 2s junto de `VmRSS` (`35,06 MiB`, abaixo do teto de `45 MiB`), `VmHWM` e `Threads`.
+
+---
+
 ## [0.5.0] - 2026-11-24
 
 ### Adicionado
@@ -102,7 +120,8 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
-[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Arkmedess/eStudy/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Arkmedess/eStudy/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Arkmedess/eStudy/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Arkmedess/eStudy/compare/v0.3.0...v0.4.0

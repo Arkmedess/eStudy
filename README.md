@@ -1,8 +1,8 @@
 # eStudy
 
-Aplicativo desktop local-first de produtividade pessoal em **Rust**, reunindo **Home Pessoal, Projetos, Calendário Unificado/Hoje, Estudos, Estante de Leituras, Foco/Áudio e Gamificação leve** em um único binário nativo com consumo alvo de **20–45 MB de RAM** (atualmente ~33 MiB em repouso no backend padrão `tiny-skia`).
+Aplicativo desktop local-first de produtividade pessoal em **Rust**, reunindo **Home Pessoal, Projetos, Hábitos, Segundo Cérebro, Calendário Unificado/Hoje, Estudos, Estante de Leituras, Foco/Áudio e Gamificação leve** em um único binário nativo com consumo alvo de **20–45 MB de RAM** (atualmente ~35 MiB em repouso no backend padrão `tiny-skia`).
 
-> **Status atual:** `v0.5.0` — Tipografia real embutida (`Plus Jakarta Sans`, `Lora`, `JetBrains Mono`), paleta de 7 categorias (`CategoryColor`), barra lateral fina (`220px`) com mascote contextual, Home em Painel Bento editorial com gráfico `SparklineCanvas` (14 dias) e Heatmap anual (365 dias), Projetos (Kanban + Marcos/Eisenhower/Foco Semanal + Drawer da tarefa), Calendário Unificado (`Ano/Mês/Semana/Dia`), Gaveta Flutuante "Hoje" em cápsulas proporcionais, Busca Global (`Ctrl+K` com `FTS5`) e Pomodoro em tela cheia com áudio procedural DSP (`-16 LUFS`).
+> **Status atual:** `v0.6.0` — Tipografia embutida (`Plus Jakarta Sans`, `Lora`, `JetBrains Mono`), barra lateral recolhível estável (`220px` <-> `64px`) com mascote contextual, Home em Painel Bento com *Hábitos de Hoje* e *Segundo Cérebro* inline, Popups rápidos sem trocar de tela, Projetos com visão semanal por turnos (`Manhã/Tarde/Noite`) e disparo direto para o Pomodoro, módulos completos de **Hábitos** e **Segundo Cérebro**, Calendário Unificado, Gaveta Flutuante "Hoje", `Ctrl+K` com `FTS5` e Modo Foco com áudio procedural DSP (`-16 LUFS`).
 
 ---
 
@@ -46,7 +46,7 @@ bash scripts/bench_and_validate.sh
 - `apps/estudy-desktop`: binário principal com persistência SQLite, escrita seletiva (*dirty tracking*) e logs diários em JSON.
 - `apps/estudy-preview`: sandbox visual com dados de exemplo para testar layouts e temas isoladamente.
 
-Os próximos ciclos adicionam Estudos (`v0.5.0`), Estante (`v0.6.0`), servidor MCP (`v0.7.0`) e Jardim/Pets/Loja (`v0.8.0`). Veja o plano completo em [ROADMAP.md](./ROADMAP.md).
+Os próximos ciclos entregam polimento de usabilidade/UX (`v0.6.1`), Estudos e Estante (`v0.7.0`), servidor MCP nativo e Jardim/Pets/Loja (`v0.8.0`). Veja o plano completo em [ROADMAP.md](./ROADMAP.md) e o estudo de UX em [docs/ux-architecture-0.6.1.md](./docs/ux-architecture-0.6.1.md).
 
 ---
 
