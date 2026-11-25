@@ -8,19 +8,27 @@ use estudy_ui_kit::{EstudyTheme, Icon, SPACE_2, SPACE_3};
 use iced::widget::{button, column, row, scrollable, text, text_input};
 use iced::{Alignment, Element, Length};
 
-/// Rotas principais navegáveis pela Barra de Comando e Topbar.
+/// Rotas principais navegáveis pela Sidebar, Barra de Comando e Topbar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppRoute {
-    /// Home pessoal em 3 colunas.
+    /// Painel pessoal Bento com resumo do dia, foco, hábitos e projetos.
     Home,
-    /// Projetos (Kanban + frameworks leves).
+    /// Projetos (Kanban + visão semanal por turnos + frameworks leves).
     Projects,
+    /// Hábitos diários, grade semanal e aderência mensal.
+    Habits,
+    /// Segundo Cérebro: ideias, notas, referências e links.
+    SecondBrain,
     /// Calendário unificado e Timeline Hoje.
     Calendar,
-    /// Módulo de Estudos.
+    /// Módulo de Estudos (ciclo contínuo, revisões espaçadas e métricas).
     Studies,
-    /// Estante de Leituras.
+    /// Estante de Leituras e Reader Companion.
     Bookshelf,
+    /// Controle financeiro pessoal simples.
+    Finance,
+    /// Cockpit Pomodoro e áudio procedural DSP.
+    Focus,
     /// Jardim interativo e Pet companheiro.
     GardenAndPets,
     /// Loja modular de cosméticos.
@@ -30,18 +38,22 @@ pub enum AppRoute {
 }
 
 impl AppRoute {
-    /// Nome legível da rota para menus e busca.
+    /// Nome legível da rota para menus, breadcrumb e busca.
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Home => "Home",
-            Self::Projects => "Projetos",
-            Self::Calendar => "Calendário",
+            Self::Home => "Início",
+            Self::Projects => "Projetos & Tarefas",
+            Self::Habits => "Hábitos",
+            Self::SecondBrain => "Segundo Cérebro",
+            Self::Calendar => "Agenda",
             Self::Studies => "Estudos",
             Self::Bookshelf => "Estante",
+            Self::Finance => "Financeiro",
+            Self::Focus => "Pomodoro",
             Self::GardenAndPets => "Jardim & Pets",
             Self::Shop => "Loja",
-            Self::Settings => "Configurações",
+            Self::Settings => "Ajustes",
         }
     }
 }
@@ -512,10 +524,42 @@ fn navigation_commands() -> Vec<PaletteCommand> {
         cmd(
             "nav-projects",
             "Ir para Projetos",
-            "Kanban 4 colunas e frameworks leves",
+            "Kanban 4 colunas, semana por turnos e frameworks leves",
             None,
             Icon::FolderKanban,
             PaletteAction::Navigate(AppRoute::Projects),
+        ),
+        cmd(
+            "nav-habits",
+            "Ir para Hábitos",
+            "Grade semanal de constância e progresso mensal",
+            None,
+            Icon::Flame,
+            PaletteAction::Navigate(AppRoute::Habits),
+        ),
+        cmd(
+            "nav-second-brain",
+            "Ir para Segundo Cérebro",
+            "Notas, ideias, referências e links pesquisáveis",
+            None,
+            Icon::Brain,
+            PaletteAction::Navigate(AppRoute::SecondBrain),
+        ),
+        cmd(
+            "nav-finance",
+            "Ir para Financeiro",
+            "Entradas, saídas e gastos por categoria",
+            None,
+            Icon::Coins,
+            PaletteAction::Navigate(AppRoute::Finance),
+        ),
+        cmd(
+            "nav-focus",
+            "Ir para Cockpit Pomodoro",
+            "Temporizador de foco e trilhas de áudio DSP",
+            None,
+            Icon::Timer,
+            PaletteAction::Navigate(AppRoute::Focus),
         ),
         cmd(
             "nav-calendar",

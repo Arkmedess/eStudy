@@ -18,9 +18,13 @@ pub const SPACE_6: f32 = 24.0;
 /// Espaçamento amplo de seção (`32px`).
 pub const SPACE_8: f32 = 32.0;
 
-/// Altura fixa da barra superior discreta (`48px`).
-pub const TOPBAR_HEIGHT: f32 = 48.0;
+/// Altura fixa da barra superior discreta (`44px`).
+pub const TOPBAR_HEIGHT: f32 = 44.0;
+/// Largura padrão da barra lateral principal fixa (`220px`, recolhível com `Ctrl+B`).
+pub const SIDEBAR_WIDTH: f32 = 220.0;
 
+/// Raio amplo e orgânico de gavetas flutuantes (`20px`).
+pub const RADIUS_DRAWER: f32 = 20.0;
 /// Raio amplo e orgânico de cartões principais (`16px`).
 pub const RADIUS_CARD: f32 = 16.0;
 /// Raio externo de painéis e gavetas (`12px`).
@@ -762,6 +766,123 @@ impl EstudyTheme {
             value: self.text_primary,
             selection: self.accent_subtle,
         }
+    }
+
+    /// Estilo da barra lateral fixa esquerda com hairline na borda direita.
+    #[must_use]
+    pub fn sidebar_style(&self) -> container::Style {
+        container::Style {
+            background: Some(self.panel.into()),
+            text_color: Some(self.text_primary),
+            border: Border {
+                color: self.border_subtle,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+            shadow: Shadow::default(),
+            snap: true,
+        }
+    }
+
+    /// Estilo de gaveta flutuante arredondada à direita com margem externa.
+    #[must_use]
+    pub fn floating_drawer_style(&self) -> container::Style {
+        container::Style {
+            background: Some(self.card.into()),
+            text_color: Some(self.text_primary),
+            border: Border {
+                color: self.border_subtle,
+                width: 1.0,
+                radius: RADIUS_DRAWER.into(),
+            },
+            shadow: Shadow::default(),
+            snap: true,
+        }
+    }
+}
+
+/// Paleta semântica de 7 categorias para projetos, tags, hábitos, notas e agenda.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CategoryColor {
+    /// Verde sálvia (Saúde, Rotina, Equilíbrio).
+    Sage,
+    /// Terracota / argila (Urgência, Provas, Prazos).
+    Terracotta,
+    /// Azul ardósia (Faculdade, Estudos, Foco).
+    Slate,
+    /// Ocre / dourado (Financeiro, Metas, Energia).
+    Ochre,
+    /// Lavanda suave (Leituras, Referências, Criatividade).
+    Lavender,
+    /// Verde musgo profundo (Projetos principais, Conteúdo).
+    Moss,
+    /// Coral suave (Pessoal, Casa, Eventos sociais).
+    Coral,
+}
+
+impl CategoryColor {
+    /// Lista completa das 7 cores semânticas de categoria.
+    pub const ALL: [Self; 7] = [
+        Self::Sage,
+        Self::Terracotta,
+        Self::Slate,
+        Self::Ochre,
+        Self::Lavender,
+        Self::Moss,
+        Self::Coral,
+    ];
+
+    /// Seleciona de forma estável uma cor de categoria a partir de um índice ou chave.
+    #[must_use]
+    pub const fn from_index(index: usize) -> Self {
+        Self::ALL[index % Self::ALL.len()]
+    }
+
+    /// Cor sólida de destaque (ícones, pontos, texto de tag) adaptada ao modo claro/escuro.
+    #[must_use]
+    pub const fn solid(self, theme: EstudyTheme) -> Color {
+        match theme.mode {
+            ThemeMode::Light => match self {
+                Self::Sage => rgb(0x004E_7A5B),
+                Self::Terracotta => rgb(0x00B8_5D43),
+                Self::Slate => rgb(0x004A_6B82),
+                Self::Ochre => rgb(0x00B0_7A2A),
+                Self::Lavender => rgb(0x0073_628A),
+                Self::Moss => rgb(0x003D_5A45),
+                Self::Coral => rgb(0x00C2_6D5E),
+            },
+            ThemeMode::Dark => match self {
+                Self::Sage => rgb(0x008C_C49B),
+                Self::Terracotta => rgb(0x00E8_947C),
+                Self::Slate => rgb(0x008D_B7D4),
+                Self::Ochre => rgb(0x00E8_B96B),
+                Self::Lavender => rgb(0x00B8_A6D4),
+                Self::Moss => rgb(0x007E_B88E),
+                Self::Coral => rgb(0x00EC_9E90),
+            },
+        }
+    }
+
+    /// Fundo suave translúcido para cartões tintados, tiles de ícone e pílulas.
+    #[must_use]
+    pub const fn tint(self, theme: EstudyTheme) -> Color {
+        let base = self.solid(theme);
+        let alpha = match theme.mode {
+            ThemeMode::Light => 0.13,
+            ThemeMode::Dark => 0.18,
+        };
+        Color { a: alpha, ..base }
+    }
+
+    /// Borda sutil derivada da categoria para cartões Kanban e eventos tracejados.
+    #[must_use]
+    pub const fn border(self, theme: EstudyTheme) -> Color {
+        let base = self.solid(theme);
+        let alpha = match theme.mode {
+            ThemeMode::Light => 0.28,
+            ThemeMode::Dark => 0.34,
+        };
+        Color { a: alpha, ..base }
     }
 }
 

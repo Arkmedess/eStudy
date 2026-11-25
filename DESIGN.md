@@ -6,27 +6,28 @@ Documento oficial de interface, tokens visuais, tipografia, geometria e acessibi
 
 ## 1. Direção Visual e Navegação
 
-O eStudy evita barras laterais pesadas de navegação. A interface prioriza respiro visual, contraste claro e acesso direto pelo teclado (`Ctrl+K`).
+O eStudy combina a calma tátil de uma estação pessoal de estudos com hierarquia editorial clara, acesso rápido por teclado (`Ctrl+K`) e organização por módulos sem poluição visual.
 
-- **Barra superior discreta (`48px`):** marca `eStudy` à esquerda (retorna à Home); à direita apenas busca/comandos (`Ctrl+K`), atalho rápido de Pomodoro/Foco, notificações de conquistas e menu compacto de módulos (*Estudos, Estante, Jardim & Pets, Loja, Configurações*).
-- **Home em 3 colunas:**
-  - *Esquerda:* perfil local, vitrine com até 3 medalhas fixadas e cartão **"Hoje"** (próximos blocos horários, prazos e atalhos para *Semana* e *Calendário*).
-  - *Centro:* mapa de calor anual (365 dias) com o Pet no canto e grade de Projetos em 2 colunas com contadores por status.
-  - *Direita:* lista **"Em foco"** (até 5 itens pinados), **Diário de Humor** (7 dias + visão anual) e **Quadro Personalizável** com molduras (*Polaroid, Photocard, Clean, Moderna, Japandi, Museu, Nenhum*).
-- **Barra esquerda contextual (`240px`, recolhível com `Ctrl+B`):** aparece apenas dentro de telas como Projetos e Calendário, exibindo conteúdo útil daquela visão (mini-calendário mensal, resumo "Hoje" ou filtros por projeto).
-- **Gavetas deslizantes à direita:** abrir uma tarefa ou clicar em "Hoje" abre um painel sobreposto à direita sem fazer o usuário perder o contexto da tela principal.
+- **Barra lateral fixa fina (`220px`, recolhível com `Ctrl+B`):** lockup editorial `eStudy` no topo, grupos de navegação claros (*Seu Espaço*: Início, Projetos & Tarefas com badge de abertas, Hábitos, Segundo Cérebro, Agenda; *Aprofundamento*: Estudos, Estante, Financeiro, Pomodoro; *Companhia*: Jardim & Pets, Loja) e **cartão do Mascote** no rodapé com fala contextual + atalho para Ajustes.
+- **Barra superior limpa (`44px`):** botão de recolher sidebar, breadcrumb da rota ativa (`eStudy / Início`), busca rápida (`Ctrl+K`), botão primário **Focar** (com timer ao vivo), notificações, seletor rápido de preset e alternador Claro/Escuro.
+- **Home em Painel Bento Editorial:**
+  - *Cabeçalho editorial:* saudação em serifa (`Lora`), resumo vivo do dia e pílulas de salto rápido (*Timeline Hoje, Hábitos, Segundo Cérebro, Semana*).
+  - *Faixa Bento Hero assimétrica (`5fr / 7fr`):* cartão tonal de **Pulso de Foco (14 dias)** com gráfico de linha/área `SparklineCanvas` e cartão de **Ritmo anual (365 dias)** com `HeatmapGrid` e legenda `Menos ■■■■■ Mais`.
+  - *Grade principal (`8fr / 4fr`):* à esquerda, grade de **Projetos** com `category_tile` colorido por categoria e contadores com bolinhas por status + cartão **Hoje**; à direita, **Perfil + medalhas**, **Em foco (`X/5`)** com disparo direto de Pomodoro, **Diário de Humor** (7 dias / ano) e **Quadro Personalizável** com 7 molduras (*Polaroid, Photocard, Clean, Moderna, Japandi, Museu, Nenhum*).
+- **Gavetas flutuantes à direita (`20px` de raio, margem externa `16px`):** abrir uma tarefa ou clicar em "Timeline Hoje" exibe um painel flutuante arredondado (incluindo faixa semanal, blocos sem horário tintados, timeline vertical em cápsulas proporcionais, janelas livres e régua vermelha `Agora · HH:MM`).
 - **Modo Foco em tela cheia (`Esc` sai):** oculta menus e colunas, deixando apenas o anel do Pomodoro, o Pet estudando junto e os controles mínimos de áudio.
 
 ---
 
-## 2. Tipografia, Geometria e Mídia Leve
+## 2. Tipografia, Geometria, Cores de Categoria e Mídia Leve
 
-- **Fontes:**
-  - `Inter` — textos e controles da interface.
-  - `JetBrains Mono` (`tabular-nums`) — temporizadores, contadores e badges numéricos para evitar tremulação durante atualizações.
-  - `Source Serif 4` — restrita a citações de livros e destaques editoriais.
-- **Espaçamento e raios:** grade base de `4px` (`SPACE_1` a `SPACE_8`) e raios concêntricos suaves (`16px` para cartões principais e modais, `12px` para painéis internos, `10px` para controles e entradas de texto, `6px` para chips de atalho e `999px` para pílulas/filtros).
-- **Primitivos do UI Kit (`crates/estudy-ui-kit`):** cartões elevados e tonais (`card`, `tonal_card`), superfícies macias (`soft_surface`), divisores finos (`hairline_divider`), seletores em cápsula (`segmented_switch`, `pill_chip`), barras de progresso (`progress_track`), métricas (`metric_stat`), estados vazios (`empty_placeholder`), banners (`banner_toast`), atalhos (`kbd_hint`) e envelopes padrão de drawer/modal (`drawer_backdrop`, `modal_surface`).
+- **Fontes embutidas no binário (`crates/estudy-ui-kit/assets/fonts/`):**
+  - `Plus Jakarta Sans` (variável OFL) — família padrão de interface, controles e listas.
+  - `Lora` (variável OFL) — família editorial serifada para saudações, títulos de página e citações.
+  - `JetBrains Mono` (variável OFL) — temporizadores, horários, contadores e badges numéricos sem tremulação.
+- **Paleta semântica de 7 categorias (`CategoryColor`):** `Sage`, `Terracotta`, `Slate`, `Ochre`, `Lavender`, `Moss` e `Coral` — cada uma calibrada para modo Claro e Escuro com variantes `.solid(theme)`, `.tint(theme)` e `.border(theme)` para projetos, tags, hábitos, notas e agenda.
+- **Espaçamento e raios:** grade base de `4px` (`SPACE_1` a `SPACE_8`) e raios concêntricos suaves (`20px` para gavetas flutuantes, `16px` para cartões principais e modais, `12px` para painéis internos, `10px` para controles e entradas de texto, `6px` para chips de atalho e `999px` para pílulas/filtros).
+- **Primitivos do UI Kit (`crates/estudy-ui-kit`):** `editorial_heading`, `category_tile`, `category_pill`, `floating_drawer`, `SparklineCanvas`, `HeatmapGrid`, `card`, `tonal_card`, `soft_surface`, `hairline_divider`, `segmented_switch`, `pill_chip`, `progress_track`, `metric_stat`, `empty_placeholder`, `banner_toast`, `kbd_hint`, `drawer_backdrop` e `modal_surface`.
 - **Iconografia:** catálogo único com 87 ícones Lucide em SVG vetorial (zero emojis na interface).
 - **Sprites 2D do Jardim e Pets:** arquivos WebP artesanais (`128×128px`, 2 a 4 frames leves por estado), carregados sob demanda apenas para o que está visível na tela (teto de 1,5 MB de RAM) e animados a 4–6 FPS somente quando a janela está ativa.
 - **Ícones de Conquistas:** arquivos WebP `64×64px` em 4 raridades (*Bronze, Prata, Ouro, Platina*).

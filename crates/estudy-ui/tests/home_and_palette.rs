@@ -180,3 +180,31 @@ fn should_toggle_modules_menu_notifications_and_mood_year_view() {
     )));
     assert_eq!(app.palette.filtered_commands().len(), 1);
 }
+
+#[test]
+fn should_toggle_nav_sidebar_navigate_new_modules_and_compute_mascot_message() {
+    let mut app = make_app(
+        10,
+        HomeLoadState::Ready(Box::new(HomeDashboardData::sample_workspace("Arthur"))),
+    );
+
+    assert!(app.nav_sidebar_open);
+    app.update(AppMessage::ToggleNavSidebar);
+    assert!(!app.nav_sidebar_open);
+    app.update(AppMessage::ToggleNavSidebar);
+    assert!(app.nav_sidebar_open);
+
+    for route in [
+        AppRoute::Habits,
+        AppRoute::SecondBrain,
+        AppRoute::Finance,
+        AppRoute::Focus,
+    ] {
+        app.update(AppMessage::Navigate(route));
+        assert_eq!(app.route, route);
+        assert!(!route.label().is_empty());
+    }
+
+    let mascot_msg = app.mascot_contextual_message();
+    assert!(!mascot_msg.is_empty());
+}

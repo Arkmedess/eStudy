@@ -4,9 +4,10 @@
 
 use estudy_ui_kit::widgets::clamp_progress;
 use estudy_ui_kit::{
-    BoardFrameStyle, CosmeticLoadout, EstudyTheme, HeatmapData, Icon, RADIUS_CARD, RADIUS_CHIP,
-    RADIUS_CONTROL, RADIUS_PANEL, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_5,
-    SPACE_6, SPACE_8, ThemeMode, ThemePreset, contrast_ratio, meets_wcag_aa,
+    BoardFrameStyle, CategoryColor, CosmeticLoadout, EstudyTheme, FONT_MONO, FONT_SANS, FONT_SERIF,
+    HeatmapData, Icon, RADIUS_CARD, RADIUS_CHIP, RADIUS_CONTROL, RADIUS_DRAWER, RADIUS_PANEL,
+    RADIUS_PILL, SIDEBAR_WIDTH, SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_5, SPACE_6, SPACE_8,
+    SparklineData, ThemeMode, ThemePreset, contrast_ratio, embedded_fonts, meets_wcag_aa,
 };
 use iced::Color;
 use std::collections::HashSet;
@@ -105,4 +106,60 @@ fn should_expose_soft_geometry_tonal_surfaces_and_clamped_progress() {
             assert!(theme.pill_tray_style().background.is_some());
         }
     }
+}
+
+#[test]
+fn should_embed_three_valid_truetype_fonts_and_expose_families() {
+    let fonts = embedded_fonts();
+    assert_eq!(fonts.len(), 3);
+    for bytes in &fonts {
+        assert!(bytes.len() > 50_000, "fonte embutida muito pequena");
+        assert_eq!(&bytes[0..4], &[0x00, 0x01, 0x00, 0x00]);
+    }
+    assert_ne!(FONT_SANS, FONT_SERIF);
+    assert_ne!(FONT_SANS, FONT_MONO);
+    assert_ne!(FONT_SERIF, FONT_MONO);
+}
+
+#[test]
+fn should_resolve_seven_category_colors_and_drawer_sidebar_metrics() {
+    assert_eq!(CategoryColor::ALL.len(), 7);
+    const {
+        assert!(RADIUS_DRAWER > RADIUS_CARD);
+        assert!(SIDEBAR_WIDTH >= 200.0 && SIDEBAR_WIDTH <= 260.0);
+    }
+
+    for preset in ThemePreset::ALL {
+        for mode in ThemeMode::ALL {
+            let theme = EstudyTheme::resolve(preset, mode);
+            assert!(theme.sidebar_style().background.is_some());
+            assert!(theme.floating_drawer_style().background.is_some());
+            for (idx, cat) in CategoryColor::ALL.iter().enumerate() {
+                assert_eq!(CategoryColor::from_index(idx), *cat);
+                let solid = cat.solid(theme);
+                let tint = cat.tint(theme);
+                assert!(solid.a > 0.99);
+                assert!(tint.a > 0.05 && tint.a < 0.30);
+            }
+        }
+    }
+}
+
+#[test]
+fn should_normalize_sparkline_series_safely() {
+    assert!(SparklineData::new(vec![]).normalized_points().is_empty());
+
+    let single = SparklineData::new(vec![42.0]).normalized_points();
+    assert_eq!(single.len(), 2);
+    assert!((single[0].1 - 0.5).abs() < f32::EPSILON);
+
+    let flat = SparklineData::new(vec![10.0, 10.0, 10.0]).normalized_points();
+    assert_eq!(flat.len(), 3);
+    assert!(flat.iter().all(|&(_, y)| (y - 0.5).abs() < f32::EPSILON));
+
+    let ramp = SparklineData::new(vec![0.0, 50.0, 100.0]).normalized_points();
+    assert_eq!(ramp.len(), 3);
+    assert!((ramp[0].1 - 1.0).abs() < f32::EPSILON);
+    assert!((ramp[1].1 - 0.5).abs() < f32::EPSILON);
+    assert!((ramp[2].1 - 0.0).abs() < f32::EPSILON);
 }

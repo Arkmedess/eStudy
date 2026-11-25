@@ -1,17 +1,19 @@
 //! Shell principal do aplicativo **eStudy** (MVU puro desacoplado de janela).
 
 use chrono::Timelike;
-use estudy_domain::{CalendarViewMode, ClockPort, PomodoroPreset};
+use estudy_domain::{CalendarViewMode, ClockPort, PomodoroPreset, TaskStatus};
 use estudy_ui_kit::widgets::{
-    banner_toast, card, empty_placeholder, hairline_divider, icon_svg, kbd_hint, section_header,
+    banner_toast, card, category_tile, empty_placeholder, hairline_divider, icon_svg, kbd_hint,
+    section_header, soft_surface,
 };
 use estudy_ui_kit::{
-    CosmeticLoadout, EstudyTheme, Icon, SPACE_2, SPACE_3, SPACE_4, SPACE_6, TOPBAR_HEIGHT,
-    ThemeMode, ThemePreset,
+    CategoryColor, CosmeticLoadout, EstudyTheme, FONT_MONO, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD,
+    FONT_SERIF_MEDIUM, Icon, RADIUS_PILL, SIDEBAR_WIDTH, SPACE_1, SPACE_2, SPACE_3, SPACE_4,
+    SPACE_6, TOPBAR_HEIGHT, ThemeMode, ThemePreset,
 };
 use iced::keyboard::{self, Key, Modifiers};
-use iced::widget::{button, column, container, row, stack, text};
-use iced::{Alignment, Element, Length, Subscription};
+use iced::widget::{button, column, container, row, scrollable, stack, text};
+use iced::{Alignment, Border, Element, Length, Subscription};
 use std::sync::Arc;
 
 use crate::command_palette::{
@@ -37,6 +39,8 @@ pub enum AppMessage {
     ToggleModulesMenu,
     /// Fecha menus e overlays abertos (`Escape`).
     CloseOverlays,
+    /// Alterna a barra lateral principal de navegação (`220px`).
+    ToggleNavSidebar,
     /// Alterna a barra contextual esquerda na tela ativa (`Ctrl+B`).
     ToggleContextSidebar,
     /// Alterna o próximo preset de tema oficial.
@@ -70,6 +74,8 @@ pub struct EstudyApp {
     pub notifications_open: bool,
     /// Estado do menu compacto de módulos.
     pub modules_menu_open: bool,
+    /// Indica se a barra lateral principal (`220px`) está expandida.
+    pub nav_sidebar_open: bool,
     /// Estado da fatia Home.
     pub home_state: HomeLoadState,
     /// Estado da fatia Projetos (Kanban, frameworks e Drawer da tarefa).
@@ -119,6 +125,7 @@ impl EstudyApp {
             palette: CommandPaletteState::new(),
             notifications_open: false,
             modules_menu_open: false,
+            nav_sidebar_open: true,
             home_state,
             projects_state,
             calendar_state,
@@ -149,6 +156,31 @@ impl EstudyApp {
             "Boa tarde"
         } else {
             "Boa noite"
+        }
+    }
+
+    /// Quantidade de tarefas ainda em aberto para exibir no badge da barra lateral.
+    #[must_use]
+    pub fn open_tasks_count(&self) -> usize {
+        self.projects_state
+            .tasks
+            .iter()
+            .filter(|task| task.status != TaskStatus::Done)
+            .count()
+    }
+
+    /// Gera uma fala contextual curta para o mascote no rodapé da barra lateral.
+    #[must_use]
+    pub fn mascot_contextual_message(&self) -> String {
+        if self.is_focus_ticking() {
+            let mins = self.focus_state.timer.remaining_seconds().div_ceil(60);
+            return format!("Foco firme! Faltam {mins} min neste bloco.");
+        }
+        let open_tasks = self.open_tasks_count();
+        if open_tasks > 0 {
+            format!("{open_tasks} tarefas abertas. Que tal 25 min em uma delas?")
+        } else {
+            "Tudo limpo por aqui. Ótimo momento para uma leitura calma.".to_string()
         }
     }
 
@@ -186,6 +218,9 @@ impl EstudyApp {
                 self.calendar_state.today_drawer_open = false;
                 self.focus_state.fullscreen_active = false;
             }
+            AppMessage::ToggleNavSidebar => {
+                self.nav_sidebar_open = !self.nav_sidebar_open;
+            }
             AppMessage::ToggleContextSidebar => match self.route {
                 AppRoute::Projects => self
                     .projects_state
@@ -193,7 +228,9 @@ impl EstudyApp {
                 AppRoute::Calendar => self
                     .calendar_state
                     .update(CalendarMessage::ToggleSidebar, self.clock.now_utc()),
-                _ => {}
+                _ => {
+                    self.nav_sidebar_open = !self.nav_sidebar_open;
+                }
             },
             AppMessage::CycleThemePreset => {
                 self.loadout.theme_preset = self.loadout.theme_preset.next();
@@ -248,19 +285,27 @@ impl EstudyApp {
 
         let topbar = self.view_topbar(theme);
         let body = self.view_route_body(theme);
+        let main_column = column![topbar, body]
+            .width(Length::Fill)
+            .height(Length::Fill);
 
-        let shell = container(
-            column![topbar, body]
+        let shell_layout: Element<'_, AppMessage> = if self.nav_sidebar_open {
+            row![self.view_nav_sidebar(theme), main_column]
                 .width(Length::Fill)
-                .height(Length::Fill),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(move |_| container::Style {
-            background: Some(theme.bg.into()),
-            text_color: Some(theme.text_primary),
-            ..container::Style::default()
-        });
+                .height(Length::Fill)
+                .into()
+        } else {
+            main_column.into()
+        };
+
+        let shell = container(shell_layout)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(move |_| container::Style {
+                background: Some(theme.bg.into()),
+                text_color: Some(theme.text_primary),
+                ..container::Style::default()
+            });
 
         if self.palette.is_open {
             stack![shell, self.palette.view(theme, AppMessage::Palette)].into()
@@ -497,18 +542,231 @@ impl EstudyApp {
         }
     }
 
-    fn view_topbar(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
-        let brand_btn = button(
+    fn view_nav_sidebar(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
+        let brand_header = button(
             row![
-                icon_svg(Icon::GraduationCap, 18.0, theme.accent),
-                text("eStudy").size(15).color(theme.text_primary),
+                category_tile(Icon::GraduationCap, CategoryColor::Moss, 30.0, theme),
+                column![
+                    text("eStudy")
+                        .size(16)
+                        .font(FONT_SERIF_MEDIUM)
+                        .color(theme.text_primary),
+                    text("estação pessoal").size(10).color(theme.text_muted),
+                ]
+                .spacing(0.0),
             ]
             .spacing(SPACE_2)
             .align_y(Alignment::Center),
         )
         .on_press(AppMessage::Navigate(AppRoute::Home))
-        .padding([SPACE_2, SPACE_3])
-        .style(move |_, status| theme.subtle_button_style(status));
+        .width(Length::Fill)
+        .padding([SPACE_2, SPACE_2])
+        .style(move |_, status| theme.ghost_button_style(status));
+
+        let open_tasks = self.open_tasks_count();
+        let space_section = column![
+            sidebar_group_label("SEU ESPAÇO", theme),
+            self.sidebar_nav_item(AppRoute::Home, Icon::Home, None, theme),
+            self.sidebar_nav_item(
+                AppRoute::Projects,
+                Icon::FolderKanban,
+                (open_tasks > 0).then(|| open_tasks.to_string()),
+                theme,
+            ),
+            self.sidebar_nav_item(AppRoute::Habits, Icon::Flame, None, theme),
+            self.sidebar_nav_item(AppRoute::SecondBrain, Icon::Brain, None, theme),
+            self.sidebar_nav_item(AppRoute::Calendar, Icon::Calendar, None, theme),
+        ]
+        .spacing(2.0);
+
+        let depth_section = column![
+            sidebar_group_label("APROFUNDAMENTO", theme),
+            self.sidebar_nav_item(AppRoute::Studies, Icon::GraduationCap, None, theme),
+            self.sidebar_nav_item(AppRoute::Bookshelf, Icon::BookOpen, None, theme),
+            self.sidebar_nav_item(AppRoute::Finance, Icon::Coins, None, theme),
+            self.sidebar_nav_item(
+                AppRoute::Focus,
+                Icon::Timer,
+                self.is_focus_ticking().then(|| {
+                    let rem = self.focus_state.timer.remaining_seconds();
+                    format!("{:02}:{:02}", rem / 60, rem % 60)
+                }),
+                theme,
+            ),
+        ]
+        .spacing(2.0);
+
+        let companion_section = column![
+            sidebar_group_label("COMPANHIA", theme),
+            self.sidebar_nav_item(AppRoute::GardenAndPets, Icon::Sprout, None, theme),
+            self.sidebar_nav_item(AppRoute::Shop, Icon::ShoppingBag, None, theme),
+        ]
+        .spacing(2.0);
+
+        let mascot_card = self.view_sidebar_mascot_card(theme);
+        let settings_btn = self.sidebar_nav_item(AppRoute::Settings, Icon::Settings, None, theme);
+
+        let nav_scroll = scrollable(
+            column![space_section, depth_section, companion_section]
+                .spacing(SPACE_4)
+                .width(Length::Fill),
+        )
+        .height(Length::Fill);
+
+        container(
+            column![
+                brand_header,
+                hairline_divider(theme),
+                nav_scroll,
+                mascot_card,
+                settings_btn,
+            ]
+            .spacing(SPACE_3)
+            .width(Length::Fill)
+            .height(Length::Fill),
+        )
+        .width(Length::Fixed(SIDEBAR_WIDTH))
+        .height(Length::Fill)
+        .padding([SPACE_3, SPACE_3])
+        .style(move |_| theme.sidebar_style())
+        .into()
+    }
+
+    fn view_sidebar_mascot_card(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
+        let pet_name = match &self.home_state {
+            HomeLoadState::Ready(data) => data.pet_badge_label.as_str(),
+            _ => "Mochi",
+        };
+        soft_surface(
+            column![
+                row![
+                    category_tile(Icon::PawPrint, CategoryColor::Ochre, 26.0, theme),
+                    text(pet_name)
+                        .size(12)
+                        .font(FONT_SANS_SEMIBOLD)
+                        .color(theme.text_primary),
+                ]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
+                text(self.mascot_contextual_message())
+                    .size(11)
+                    .color(theme.text_muted),
+            ]
+            .spacing(SPACE_2),
+            theme,
+        )
+        .padding(SPACE_3)
+        .width(Length::Fill)
+        .into()
+    }
+
+    fn sidebar_nav_item<'a>(
+        &self,
+        route: AppRoute,
+        icon: Icon,
+        badge: Option<String>,
+        theme: EstudyTheme,
+    ) -> Element<'a, AppMessage> {
+        let is_active = self.route == route;
+        let text_color = if is_active {
+            theme.text_primary
+        } else {
+            theme.text_muted
+        };
+        let icon_color = if is_active {
+            theme.accent
+        } else {
+            theme.text_muted
+        };
+        let font = if is_active {
+            FONT_SANS_SEMIBOLD
+        } else {
+            FONT_SANS_MEDIUM
+        };
+
+        let mut content = row![
+            icon_svg(icon, 15.0, icon_color),
+            text(route.label()).size(13).font(font).color(text_color),
+        ]
+        .spacing(SPACE_2)
+        .align_y(Alignment::Center)
+        .width(Length::Fill);
+
+        if let Some(count_label) = badge {
+            content = content.push(
+                container(
+                    container(
+                        text(count_label)
+                            .size(10)
+                            .font(FONT_MONO)
+                            .color(if is_active {
+                                theme.on_accent
+                            } else {
+                                theme.text_primary
+                            }),
+                    )
+                    .padding([2.0, 7.0])
+                    .style(move |_| container::Style {
+                        background: Some(
+                            if is_active {
+                                theme.accent
+                            } else {
+                                theme.surface_soft
+                            }
+                            .into(),
+                        ),
+                        border: Border {
+                            radius: RADIUS_PILL.into(),
+                            ..Border::default()
+                        },
+                        ..container::Style::default()
+                    }),
+                )
+                .align_x(Alignment::End)
+                .width(Length::Fill),
+            );
+        }
+
+        button(content)
+            .on_press(AppMessage::Navigate(route))
+            .width(Length::Fill)
+            .padding([7.0, 10.0])
+            .style(move |_, status| {
+                if is_active {
+                    button::Style {
+                        background: Some(theme.accent_subtle.into()),
+                        text_color: theme.text_primary,
+                        border: Border {
+                            color: theme.border_subtle,
+                            width: 1.0,
+                            radius: 10.0.into(),
+                        },
+                        ..button::Style::default()
+                    }
+                } else {
+                    theme.ghost_button_style(status)
+                }
+            })
+            .into()
+    }
+
+    fn view_topbar(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
+        let toggle_sidebar_btn = button(icon_svg(Icon::PanelLeft, 15.0, theme.text_muted))
+            .on_press(AppMessage::ToggleNavSidebar)
+            .padding(SPACE_2)
+            .style(move |_, status| theme.ghost_button_style(status));
+
+        let breadcrumb = row![
+            toggle_sidebar_btn,
+            text("eStudy").size(12).color(theme.text_muted),
+            text("/").size(12).color(theme.text_muted),
+            text(self.route.label())
+                .size(13)
+                .font(FONT_SANS_SEMIBOLD)
+                .color(theme.text_primary),
+        ]
+        .spacing(SPACE_2)
+        .align_y(Alignment::Center);
 
         let cmd_btn = button(
             row![
@@ -539,19 +797,22 @@ impl EstudyApp {
             cmd_btn,
             button(
                 row![
-                    icon_svg(Icon::Timer, 14.0, theme.accent),
-                    text(focus_label).size(12).color(theme.text_primary),
+                    icon_svg(Icon::Timer, 14.0, theme.on_accent),
+                    text(focus_label)
+                        .size(12)
+                        .font(FONT_SANS_MEDIUM)
+                        .color(theme.on_accent),
                 ]
                 .spacing(SPACE_2)
                 .align_y(Alignment::Center),
             )
             .on_press(AppMessage::QuickFocusShortcut)
-            .padding([SPACE_2, SPACE_3])
-            .style(move |_, status| theme.subtle_button_style(status)),
+            .padding([5.0, SPACE_3])
+            .style(move |_, status| theme.primary_button_style(status)),
             button(icon_svg(Icon::Bell, 15.0, theme.text_primary))
                 .on_press(AppMessage::ToggleNotifications)
                 .padding(SPACE_2)
-                .style(move |_, status| theme.subtle_button_style(status)),
+                .style(move |_, status| theme.ghost_button_style(status)),
             button(
                 row![
                     icon_svg(Icon::Palette, 14.0, theme.accent),
@@ -559,35 +820,23 @@ impl EstudyApp {
                         .size(12)
                         .color(theme.text_primary),
                 ]
-                .spacing(SPACE_2)
+                .spacing(SPACE_1)
                 .align_y(Alignment::Center),
             )
             .on_press(AppMessage::CycleThemePreset)
-            .padding([SPACE_2, SPACE_3])
-            .style(move |_, status| theme.subtle_button_style(status)),
+            .padding([SPACE_1, SPACE_2])
+            .style(move |_, status| theme.ghost_button_style(status)),
             button(icon_svg(mode_icon, 15.0, theme.text_primary))
                 .on_press(AppMessage::ToggleThemeMode)
                 .padding(SPACE_2)
-                .style(move |_, status| theme.subtle_button_style(status)),
-            button(
-                row![
-                    icon_svg(Icon::LayoutGrid, 14.0, theme.accent),
-                    text("Módulos").size(12).color(theme.text_primary),
-                    icon_svg(Icon::ChevronDown, 13.0, theme.text_muted),
-                ]
-                .spacing(SPACE_2)
-                .align_y(Alignment::Center),
-            )
-            .on_press(AppMessage::ToggleModulesMenu)
-            .padding([SPACE_2, SPACE_3])
-            .style(move |_, status| theme.subtle_button_style(status)),
+                .style(move |_, status| theme.ghost_button_style(status)),
         ]
         .spacing(SPACE_2)
         .align_y(Alignment::Center);
 
         container(
             row![
-                brand_btn,
+                breadcrumb,
                 container(controls)
                     .align_x(Alignment::End)
                     .width(Length::Fill),
@@ -644,6 +893,13 @@ impl EstudyApp {
                 theme,
                 AppMessage::Calendar,
             ),
+            AppRoute::Focus => {
+                let pet_label = match &self.home_state {
+                    HomeLoadState::Ready(data) => data.pet_badge_label.as_str(),
+                    _ => "Mochi",
+                };
+                view_focus_mode(&self.focus_state, pet_label, theme, AppMessage::Focus)
+            }
             other => view_module_placeholder(other, theme),
         };
 
@@ -653,6 +909,17 @@ impl EstudyApp {
             main_view
         }
     }
+}
+
+fn sidebar_group_label<'a>(label: &'static str, theme: EstudyTheme) -> Element<'a, AppMessage> {
+    container(
+        text(label)
+            .size(10)
+            .font(FONT_SANS_SEMIBOLD)
+            .color(theme.text_muted),
+    )
+    .padding([4.0, 10.0])
+    .into()
 }
 
 fn view_notifications_popover<'a>(theme: EstudyTheme) -> Element<'a, AppMessage> {

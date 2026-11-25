@@ -6,8 +6,8 @@ use estudy_ui_kit::widgets::{
     tonal_card,
 };
 use estudy_ui_kit::{
-    BoardFrameStyle, EstudyTheme, HeatmapData, HeatmapGrid, Icon, SPACE_2, SPACE_3, SPACE_4,
-    SPACE_6, ThemeMode, ThemePreset,
+    BoardFrameStyle, EstudyTheme, FONT_SANS, HeatmapData, HeatmapGrid, Icon, SPACE_2, SPACE_3,
+    SPACE_4, SPACE_6, ThemeMode, ThemePreset, embedded_fonts,
 };
 use iced::widget::{button, canvas, column, container, row, scrollable, text};
 use iced::{Alignment, Element, Length};
@@ -316,9 +316,15 @@ fn view_icons_card<'a>(theme: EstudyTheme) -> Element<'a, PreviewMessage> {
 }
 
 fn main() -> iced::Result {
-    iced::application(PreviewApp::boot, PreviewApp::update, PreviewApp::view)
+    let mut app = iced::application(PreviewApp::boot, PreviewApp::update, PreviewApp::view)
         .title("eStudy UI Kit · Preview")
+        .default_font(FONT_SANS)
         .window_size((1240.0, 880.0))
-        .centered()
-        .run()
+        .centered();
+
+    for font_bytes in embedded_fonts() {
+        app = app.font(font_bytes);
+    }
+
+    app.run()
 }

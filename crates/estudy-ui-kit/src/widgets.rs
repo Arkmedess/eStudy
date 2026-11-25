@@ -3,10 +3,11 @@
 use iced::widget::{button, column, container, progress_bar, row, svg, text};
 use iced::{Alignment, Border, Color, Element, Length};
 
+use crate::fonts::{FONT_MONO, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD, FONT_SERIF_MEDIUM};
 use crate::icons::Icon;
 use crate::theme::{
-    EstudyTheme, RADIUS_CHIP, RADIUS_CONTROL, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3, SPACE_4,
-    SPACE_5,
+    CategoryColor, EstudyTheme, RADIUS_CHIP, RADIUS_CONTROL, RADIUS_PILL, SPACE_1, SPACE_2,
+    SPACE_3, SPACE_4, SPACE_5,
 };
 
 /// Garante a normalização de uma razão de progresso no intervalo fechado `0.0..=1.0`.
@@ -123,18 +124,23 @@ pub fn kbd_hint<'a, Message: 'a>(
     shortcut: impl Into<String>,
     theme: EstudyTheme,
 ) -> Element<'a, Message> {
-    container(text(shortcut.into()).size(10).color(theme.text_muted))
-        .padding([2.0, 6.0])
-        .style(move |_| container::Style {
-            background: Some(theme.surface_soft.into()),
-            border: Border {
-                color: theme.border_subtle,
-                width: 1.0,
-                radius: RADIUS_CHIP.into(),
-            },
-            ..container::Style::default()
-        })
-        .into()
+    container(
+        text(shortcut.into())
+            .size(10)
+            .font(FONT_MONO)
+            .color(theme.text_muted),
+    )
+    .padding([2.0, 6.0])
+    .style(move |_| container::Style {
+        background: Some(theme.surface_soft.into()),
+        border: Border {
+            color: theme.border_subtle,
+            width: 1.0,
+            radius: RADIUS_CHIP.into(),
+        },
+        ..container::Style::default()
+    })
+    .into()
 }
 
 /// Chip interativo em formato pílula com ponto colorido ou ícone opcional.
@@ -382,17 +388,124 @@ pub fn modal_surface<'a, Message: 'a>(
         .into()
 }
 
-/// Cabeçalho enxuto de seção com ícone SVG e título.
+/// Cabeçalho enxuto de seção com ícone SVG e título em peso semibold.
 pub fn section_header<'a, Message: 'a>(
     icon: Icon,
     title: impl Into<String>,
     theme: EstudyTheme,
 ) -> Element<'a, Message> {
     row![
-        icon_svg(icon, 16.0, theme.accent),
-        text(title.into()).size(14).color(theme.text_primary),
+        icon_svg(icon, 15.0, theme.accent),
+        text(title.into())
+            .size(14)
+            .font(FONT_SANS_SEMIBOLD)
+            .color(theme.text_primary),
     ]
     .spacing(SPACE_2)
     .align_y(Alignment::Center)
     .into()
+}
+
+/// Cabeçalho editorial de página com título serifado (`Lora`) e subtítulo contextual.
+pub fn editorial_heading<'a, Message: 'a>(
+    title: impl Into<String>,
+    subtitle: impl Into<String>,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    column![
+        text(title.into())
+            .size(28)
+            .font(FONT_SERIF_MEDIUM)
+            .color(theme.text_primary),
+        text(subtitle.into())
+            .size(13)
+            .font(FONT_SANS_MEDIUM)
+            .color(theme.text_muted),
+    ]
+    .spacing(SPACE_1)
+    .into()
+}
+
+/// Quadrado arredondado com ícone tintado pela cor semântica da categoria/projeto.
+#[must_use]
+pub fn category_tile<'a, Message: 'a>(
+    icon: Icon,
+    category: CategoryColor,
+    size: f32,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    let icon_size = (size * 0.52).clamp(12.0, 24.0);
+    let fg = category.solid(theme);
+    let bg = category.tint(theme);
+    container(icon_svg(icon, icon_size, fg))
+        .width(Length::Fixed(size))
+        .height(Length::Fixed(size))
+        .center_x(Length::Fixed(size))
+        .center_y(Length::Fixed(size))
+        .style(move |_| container::Style {
+            background: Some(bg.into()),
+            border: Border {
+                color: category.border(theme),
+                width: 1.0,
+                radius: RADIUS_CONTROL.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// Pílula compacta de tag com ponto colorido semântico.
+pub fn category_pill<'a, Message: 'a>(
+    label: impl Into<String>,
+    category: CategoryColor,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    let fg = category.solid(theme);
+    let bg = category.tint(theme);
+    container(
+        row![
+            color_dot(fg),
+            text(label.into())
+                .size(11)
+                .font(FONT_SANS_MEDIUM)
+                .color(theme.text_primary),
+        ]
+        .spacing(5.0)
+        .align_y(Alignment::Center),
+    )
+    .padding([3.0, 9.0])
+    .style(move |_| container::Style {
+        background: Some(bg.into()),
+        border: Border {
+            color: category.border(theme),
+            width: 1.0,
+            radius: RADIUS_PILL.into(),
+        },
+        ..container::Style::default()
+    })
+    .into()
+}
+
+/// Gaveta flutuante arredondada à direita com margem externa (`20px` de raio).
+pub fn floating_drawer<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+    width: f32,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    let drawer_box = container(content)
+        .width(Length::Fixed(width))
+        .height(Length::Fill)
+        .padding(SPACE_5)
+        .style(move |_| theme.floating_drawer_style());
+
+    container(drawer_box)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(SPACE_4)
+        .align_x(Alignment::End)
+        .style(|_| container::Style {
+            background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.24).into()),
+            ..container::Style::default()
+        })
+        .into()
 }

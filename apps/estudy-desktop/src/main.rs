@@ -13,7 +13,7 @@ use estudy_ui::{
     AppMessage, AppRoute, CalendarState, EstudyApp, HomeDashboardData, HomeLoadState,
     PaletteAction, PaletteCommand, PaletteMessage, ProjectsState,
 };
-use estudy_ui_kit::Icon;
+use estudy_ui_kit::{FONT_SANS, Icon, embedded_fonts};
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -430,10 +430,16 @@ fn load_or_seed_calendar(
 }
 
 fn main() -> iced::Result {
-    iced::application(DesktopShell::boot, DesktopShell::update, DesktopShell::view)
+    let mut app = iced::application(DesktopShell::boot, DesktopShell::update, DesktopShell::view)
         .title("eStudy")
+        .default_font(FONT_SANS)
         .subscription(DesktopShell::subscription)
-        .window_size((1280.0, 800.0))
-        .centered()
-        .run()
+        .window_size((1360.0, 840.0))
+        .centered();
+
+    for font_bytes in embedded_fonts() {
+        app = app.font(font_bytes);
+    }
+
+    app.run()
 }
