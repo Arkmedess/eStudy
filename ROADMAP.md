@@ -25,17 +25,23 @@ Plano incremental de entregas do **eStudy**. Cada marco entrega um conjunto func
 - **v0.4.0 — Pomodoro, Modo Foco e Motor de Áudio Procedural DSP** *(Concluído)*
   - Temporizador em `Canvas` com relógio monotônico, Modo Foco em tela cheia, captura pós-sessão e síntese procedural de áudio (`cpal` + fila lock-free) em `-16 LUFS`.
 
-- **v0.5.0 — Módulo de Estudos Completo**
-  - Ciclo contínuo de matérias, revisões espaçadas (`1/7/14/30/60d` e FSRS), flashcards *Active Recall*, Caderno de Erros e 4 gráficos analíticos em `Canvas`.
+- **v0.5.0 — Redesign Editorial, Fontes Embutidas, Sidebar 220px, Home Bento e Timeline em Cápsulas** *(Concluído)*
+  - Fontes variáveis OFL embutidas no binário (`Plus Jakarta Sans`, `Lora` e `JetBrains Mono`), 7 cores de categoria (`CategoryColor`) e gráfico de área `SparklineCanvas`.
+  - Navegação principal em sidebar fina (`220px`, recolhível com `Ctrl+B`), badges vivos, cartão do Mascote contextual no rodapé e topbar limpa (`44px`) com breadcrumb.
+  - Home redesenhada em Painel Bento editorial (Pulso de Foco 14d + Ritmo Anual 365d + Projetos coloridos por categoria) e Gaveta Flutuante "Hoje" com faixa semanal, cápsulas proporcionais e régua `Agora`.
+  - Perfil `dev` otimizando dependências de renderização (`tiny-skia` / `cosmic-text`) com `opt-level = 2` para fluidez local.
 
-- **v0.6.0 — Estante de Leituras**
-  - Estantes customizáveis, ações em lote, sorteio de próxima leitura (*TBR Picker*), múltiplos formatos, *Reader Companion* com emoções/citações/releituras, metas e cache LRU de capas da Open Library.
+- **v0.6.0 — Projetos & Tarefas Turbinados, Hábitos, Segundo Cérebro e Financeiro** *(Em andamento)*
+  - Visão semanal de tarefas por turnos (`Manhã`, `Tarde`, `Noite`), Kanban com cartões tintados, gaveta flutuante da tarefa e disparo direto de foco para o Pomodoro.
+  - Módulo de Hábitos (grade semanal, constância mensal em barras e calendário), Segundo Cérebro (notas, ideias, referências e links integrados ao `FTS5`) e Financeiro pessoal simples.
 
-- **v0.7.0 — Servidor MCP Nativo (`apps/estudy-mcp`), Modo Admin e QA Ponta a Ponta**
-  - Servidor `stdio` compartilhando os casos de uso de `estudy-domain`, permissões configuráveis, trilha `mcp_audit_log`, atualização reativa da UI via `PRAGMA data_version`, modo Admin (`--admin`) e ferramentas de sandbox (`--e2e`).
+- **v0.7.0 — Módulo de Estudos Completo e Estante de Leituras**
+  - Ciclo contínuo de matérias com "Matéria da Vez", revisões espaçadas (`1/7/14/30/60d` e FSRS), flashcards *Active Recall*, Caderno de Erros e gráficos analíticos em `Canvas`.
+  - Estante de Leituras com prateleiras customizáveis, sorteio *TBR Picker*, *Reader Companion* (`+5`/`+10` páginas, citações, estrelas) e capas da Open Library.
 
-- **v0.8.0 — Economia, Jardim Interativo, Pets, Conquistas e Loja Modular**
-  - Check-in diário, sequências, *Streak Freeze*, teto diário anti-inflação, Jardim interativo em sprites WebP (< 1,5 MB RAM), Pets colecionáveis por raridade, conquistas com toast adiado durante o Modo Foco e loja modular via `manifest.toml`.
+- **v0.8.0 — Servidor MCP Nativo (`apps/estudy-mcp`), Economia, Jardim Interativo, Pets e Loja Modular**
+  - Servidor `stdio` compartilhando os casos de uso de `estudy-domain`, trilha `mcp_audit_log`, atualização reativa da UI via `PRAGMA data_version` e modo Admin (`--admin`).
+  - Check-in diário, sequências, *Streak Freeze*, Jardim interativo em sprites WebP (< 1,5 MB RAM), Pets colecionáveis, conquistas e loja modular via `manifest.toml`.
 
 - **v0.9.0 — Backup Portátil na Nuvem, Migrador e Atualizador SHA-256**
   - Exportação/importação aberta (Markdown + YAML + JSON), verificação final do orçamento de memória (< 45 MB RAM) e empacotamento multiplataforma.

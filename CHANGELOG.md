@@ -8,6 +8,20 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
+## [0.5.0] - 2026-11-24
+
+### Adicionado
+- Tipografia real embutida no binário (`crates/estudy-ui-kit/assets/fonts/`): `Plus Jakarta Sans` (interface), `Lora` (títulos editoriais serifados) e `JetBrains Mono` (horários, timers e métricas numéricas).
+- Paleta semântica de 7 categorias (`CategoryColor`: `Sage`, `Terracotta`, `Slate`, `Ochre`, `Lavender`, `Moss`, `Coral`) calibrada para Light e Dark em `estudy-ui-kit`, além do gráfico `SparklineCanvas` e dos primitivos `editorial_heading`, `category_tile`, `category_pill` e `floating_drawer`.
+- Nova barra lateral fixa fina (`220px`, recolhível com `Ctrl+B`) com grupos de navegação (*Seu Espaço*, *Aprofundamento*, *Companhia*), badge de tarefas abertas, **cartão do Mascote** com fala contextual e novas rotas no `AppRoute` e `Ctrl+K` (*Hábitos*, *Segundo Cérebro*, *Financeiro*, *Pomodoro*).
+
+### Aprimorado
+- Home redesenhada em Painel Bento editorial: saudação serifada, faixa hero assimétrica (`5fr / 7fr`) com cartão tonal **Pulso de Foco 14 dias (`SparklineCanvas`)** e **Ritmo anual 365 dias**, e grade de Projetos com `category_tile` colorido e bolinhas por status.
+- Gaveta "Hoje" reconstruída como painel flutuante arredondado (`20px`) com faixa semanal de 7 dias, bloco *Sem horário* tintado, cápsulas proporcionais por duração, divisores `Livre · XhYm` e régua vermelha contínua `Agora · HH:MM`.
+- Perfil `dev` do `Cargo.toml` atualizado com `[profile.dev.package."*"] opt-level = 2` para manter a renderização de `tiny-skia` e `cosmic-text` fluida mesmo durante desenvolvimento local.
+
+---
+
 ## [0.4.1] - 2026-11-23
 
 ### Corrigido e Aprimorado
@@ -88,7 +102,8 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
-[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Arkmedess/eStudy/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Arkmedess/eStudy/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/Arkmedess/eStudy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Arkmedess/eStudy/compare/v0.2.0...v0.3.0
