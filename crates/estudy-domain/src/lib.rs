@@ -9,8 +9,10 @@ pub mod clock;
 pub mod error;
 pub mod events;
 pub mod focus;
+pub mod habits;
 pub mod ids;
 pub mod projects;
+pub mod second_brain;
 pub mod wallet;
 
 pub use calendar::{
@@ -24,12 +26,14 @@ pub use focus::{
     DspTrack, FocusModality, FocusPhase, FocusSessionDraft, MINIMUM_REWARDABLE_FOCUS_MINUTES,
     PomodoroPreset, PomodoroTimer, ValidatedFocusSession, calculate_focus_coins,
 };
+pub use habits::{Habit, days_in_month, overall_monthly_adherence_pct};
 pub use ids::EntityId;
 pub use projects::{
     EisenhowerQuadrant, MAX_FOCUS_PINNED_TASKS, MAX_TASK_CHECKLIST_ITEMS, Project,
     ProjectFramework, ProjectStatus, Task, TaskChecklistItem, TaskPriority, TaskProjectLink,
-    TaskStatus, validate_focus_pin_budget,
+    TaskStatus, TaskTurn, classify_task_turn, validate_focus_pin_budget,
 };
+pub use second_brain::{KnowledgeNote, NoteKind};
 pub use wallet::{
     DAILY_COIN_CAP, GENESIS_PREV_HASH, LedgerEntryType, SignedWalletEntry, WalletChain,
     WalletEntryDraft,

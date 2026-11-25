@@ -1,5 +1,6 @@
 //! Renderização da Home Pessoal em painel Bento editorial (Iced).
 
+use chrono::NaiveDate;
 use estudy_ui_kit::widgets::{
     card, category_tile, color_dot, editorial_heading, hairline_divider, icon_svg, pill_chip,
     progress_track, section_header, segmented_switch, soft_surface, status_badge, tonal_card,
@@ -17,13 +18,21 @@ use super::state::{
     MoodViewMode, ProjectCardSummary,
 };
 use crate::command_palette::AppRoute;
+use crate::features::habits::{HabitsMessage, HabitsState};
+use crate::features::second_brain::{SecondBrainMessage, SecondBrainState};
 
 /// Renderiza o estado atual da Home cobrindo Loading, Error, Empty e Populated.
+#[allow(clippy::too_many_arguments)]
 pub fn view_home<'a, Message: Clone + 'a>(
     state: &'a HomeLoadState,
+    habits: &'a HabitsState,
+    brain: &'a SecondBrainState,
+    today: NaiveDate,
     greeting: &'a str,
     theme: EstudyTheme,
     map_home: impl Fn(HomeMessage) -> Message + Clone + 'a,
+    map_habits: impl Fn(HabitsMessage) -> Message + Clone + 'a,
+    map_brain: impl Fn(SecondBrainMessage) -> Message + Clone + 'a,
     map_route: impl Fn(AppRoute) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
     match state {
@@ -32,9 +41,9 @@ pub fn view_home<'a, Message: Clone + 'a>(
         HomeLoadState::Ready(data) if data.is_empty_workspace() => {
             view_empty_state(data, greeting, theme, map_home)
         }
-        HomeLoadState::Ready(data) => {
-            view_three_columns(data, greeting, theme, map_home, map_route)
-        }
+        HomeLoadState::Ready(data) => view_bento_workspace(
+            data, habits, brain, today, greeting, theme, map_home, map_habits, map_brain, map_route,
+        ),
     }
 }
 
@@ -140,18 +149,32 @@ fn view_empty_state<'a, Message: Clone + 'a>(
         .into()
 }
 
-fn view_three_columns<'a, Message: Clone + 'a>(
+#[allow(clippy::too_many_arguments)]
+fn view_bento_workspace<'a, Message: Clone + 'a>(
     data: &'a HomeDashboardData,
+    habits: &'a HabitsState,
+    brain: &'a SecondBrainState,
+    today: NaiveDate,
     greeting: &'a str,
     theme: EstudyTheme,
     map_home: impl Fn(HomeMessage) -> Message + Clone + 'a,
+    map_habits: impl Fn(HabitsMessage) -> Message + Clone + 'a,
+    map_brain: impl Fn(SecondBrainMessage) -> Message + Clone + 'a,
     map_route: impl Fn(AppRoute) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
     let header = view_editorial_header(data, greeting, theme, map_home.clone(), map_route.clone());
     let bento_top = view_bento_hero_row(data, theme);
 
+    let inline_life_row = row![
+        view_inline_habits_card(habits, today, theme, map_habits, map_route.clone()),
+        view_inline_brain_card(brain, theme, map_brain, map_route.clone()),
+    ]
+    .spacing(SPACE_4)
+    .width(Length::Fill);
+
     let main_left = column![
         view_projects_section(&data.projects, theme, map_route),
+        inline_life_row,
         view_today_card(data, theme, map_home.clone()),
     ]
     .spacing(SPACE_4)
@@ -185,6 +208,156 @@ fn view_three_columns<'a, Message: Clone + 'a>(
         .width(Length::Fill),
     )
     .height(Length::Fill)
+    .into()
+}
+
+fn view_inline_habits_card<'a, Message: Clone + 'a>(
+    habits: &'a HabitsState,
+    today: NaiveDate,
+    theme: EstudyTheme,
+    map_habits: impl Fn(HabitsMessage) -> Message + 'a,
+    map_route: impl Fn(AppRoute) -> Message + 'a,
+) -> Element<'a, Message> {
+    let (done, total) = habits.today_progress(today);
+    let mut list = column![].spacing(SPACE_2);
+    for habit in habits.habits.iter().take(4) {
+        let cat = CategoryColor::from_index(habit.color_index);
+        let checked = habit.is_done_on(today);
+        let icon = if checked {
+            Icon::CheckCircle2
+        } else {
+            Icon::Flame
+        };
+        let fg = if checked {
+            cat.solid(theme)
+        } else {
+            theme.text_muted
+        };
+
+        list = list.push(
+            button(
+                row![
+                    icon_svg(icon, 15.0, fg),
+                    text(&habit.title)
+                        .size(13)
+                        .font(FONT_SANS_MEDIUM)
+                        .color(if checked {
+                            theme.text_muted
+                        } else {
+                            theme.text_primary
+                        }),
+                    container(
+                        text(format!("{}d", habit.current_streak(today)))
+                            .size(11)
+                            .font(FONT_MONO)
+                            .color(cat.solid(theme)),
+                    )
+                    .align_x(Alignment::End)
+                    .width(Length::Fill),
+                ]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
+            )
+            .on_press(map_habits(HabitsMessage::ToggleHabitDate {
+                habit_id: habit.id.clone(),
+                date: today,
+            }))
+            .width(Length::Fill)
+            .padding([6.0, 8.0])
+            .style(move |_, status| theme.subtle_button_style(status)),
+        );
+    }
+
+    card(
+        column![
+            row![
+                section_header(Icon::Flame, "Hábitos de Hoje", theme),
+                container(
+                    button(
+                        text(format!("{done}/{total} · ver tudo"))
+                            .size(11)
+                            .font(FONT_MONO)
+                            .color(theme.accent),
+                    )
+                    .on_press(map_route(AppRoute::Habits))
+                    .padding([2.0, 6.0])
+                    .style(move |_, status| theme.ghost_button_style(status)),
+                )
+                .align_x(Alignment::End)
+                .width(Length::Fill),
+            ]
+            .align_y(Alignment::Center),
+            hairline_divider(theme),
+            list,
+        ]
+        .spacing(SPACE_3),
+        theme,
+    )
+    .width(Length::FillPortion(1))
+    .into()
+}
+
+fn view_inline_brain_card<'a, Message: Clone + 'a>(
+    brain: &'a SecondBrainState,
+    theme: EstudyTheme,
+    map_brain: impl Fn(SecondBrainMessage) -> Message + 'a,
+    map_route: impl Fn(AppRoute) -> Message + 'a,
+) -> Element<'a, Message> {
+    let mut list = column![].spacing(SPACE_2);
+    for (idx, note) in brain.notes.iter().take(3).enumerate() {
+        let cat = CategoryColor::from_index(idx + 3);
+        list = list.push(
+            button(
+                column![
+                    row![
+                        color_dot(cat.solid(theme)),
+                        text(&note.title)
+                            .size(13)
+                            .font(FONT_SANS_SEMIBOLD)
+                            .color(theme.text_primary),
+                    ]
+                    .spacing(6.0)
+                    .align_y(Alignment::Center),
+                    text(note.preview_excerpt(72))
+                        .size(11)
+                        .color(theme.text_muted),
+                ]
+                .spacing(2.0)
+                .width(Length::Fill),
+            )
+            .on_press(map_brain(SecondBrainMessage::SelectNote(note.id.clone())))
+            .width(Length::Fill)
+            .padding([6.0, 8.0])
+            .style(move |_, status| theme.subtle_button_style(status)),
+        );
+    }
+
+    card(
+        column![
+            row![
+                section_header(Icon::Brain, "Segundo Cérebro", theme),
+                container(
+                    button(
+                        text("Abrir notas")
+                            .size(11)
+                            .font(FONT_SANS_MEDIUM)
+                            .color(theme.accent),
+                    )
+                    .on_press(map_route(AppRoute::SecondBrain))
+                    .padding([2.0, 6.0])
+                    .style(move |_, status| theme.ghost_button_style(status)),
+                )
+                .align_x(Alignment::End)
+                .width(Length::Fill),
+            ]
+            .align_y(Alignment::Center),
+            hairline_divider(theme),
+            list,
+        ]
+        .spacing(SPACE_3),
+        theme,
+    )
+    .width(Length::FillPortion(1))
     .into()
 }
 
@@ -338,6 +511,7 @@ fn view_pulse_sparkline_card<'a, Message: 'a>(
         .spacing(SPACE_2),
         theme,
     )
+    .height(Length::Fixed(198.0))
     .width(Length::FillPortion(5))
     .into()
 }
@@ -394,6 +568,7 @@ fn view_annual_heatmap_card<'a, Message: 'a>(
         .spacing(SPACE_2),
         theme,
     )
+    .height(Length::Fixed(198.0))
     .width(Length::FillPortion(7))
     .into()
 }

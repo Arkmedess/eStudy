@@ -20,8 +20,10 @@ pub const SPACE_8: f32 = 32.0;
 
 /// Altura fixa da barra superior discreta (`44px`).
 pub const TOPBAR_HEIGHT: f32 = 44.0;
-/// Largura padrão da barra lateral principal fixa (`220px`, recolhível com `Ctrl+B`).
+/// Largura padrão da barra lateral principal expandida (`220px`).
 pub const SIDEBAR_WIDTH: f32 = 220.0;
+/// Largura da barra lateral principal comprimida em trilho de ícones (`64px`).
+pub const SIDEBAR_COMPACT_WIDTH: f32 = 64.0;
 
 /// Raio amplo e orgânico de gavetas flutuantes (`20px`).
 pub const RADIUS_DRAWER: f32 = 20.0;

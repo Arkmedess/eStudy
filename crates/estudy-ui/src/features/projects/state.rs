@@ -4,7 +4,7 @@ use chrono::{Datelike, NaiveDate};
 use estudy_domain::{
     EisenhowerQuadrant, EntityId, MAX_FOCUS_PINNED_TASKS, MAX_TASK_CHECKLIST_ITEMS, Project,
     ProjectFramework, ProjectStatus, Task, TaskChecklistItem, TaskPriority, TaskProjectLink,
-    TaskStatus, validate_focus_pin_budget,
+    TaskStatus, TaskTurn, validate_focus_pin_budget,
 };
 use std::collections::BTreeSet;
 
@@ -94,6 +94,15 @@ pub enum ProjectsMessage {
     QuickTaskTitleChanged(String),
     /// Cria nova tarefa no projeto/coluna padrão.
     CreateQuickTask,
+    /// Cria nova tarefa diretamente em um dia e turno específicos (`Manhã / Tarde / Noite`).
+    CreateQuickTaskInTurn {
+        /// Data alvo no calendário.
+        date: NaiveDate,
+        /// Turno selecionado.
+        turn: TaskTurn,
+    },
+    /// Inicia um bloco Pomodoro imediatamente vinculado a esta tarefa.
+    StartFocusForTask(EntityId),
     /// Move uma tarefa para outra coluna do Kanban.
     MoveTaskStatus(EntityId, TaskStatus),
     /// Move uma tarefa para um quadrante na Matriz de Eisenhower.
@@ -303,6 +312,10 @@ impl ProjectsState {
             ProjectsMessage::SelectCalendarDay(day) => self.selected_day = day,
             ProjectsMessage::QuickTaskTitleChanged(title) => self.quick_task_title = title,
             ProjectsMessage::CreateQuickTask => self.create_quick_task(now_utc),
+            ProjectsMessage::CreateQuickTaskInTurn { date, turn } => {
+                self.create_quick_task_in_turn(date, turn, now_utc);
+            }
+            ProjectsMessage::StartFocusForTask(_) => {}
             ProjectsMessage::MoveTaskStatus(id, status) => self.move_task_status(&id, status),
             ProjectsMessage::SetTaskQuadrant(id, quadrant) => {
                 if let Some(task) = self.tasks.iter_mut().find(|task| task.id == id) {
@@ -378,6 +391,59 @@ impl ProjectsState {
             pinned_focus: false,
             start_at: None,
             due_at: None,
+            recurrence: None,
+            estimated_pomos: 1,
+            completed_pomos: 0,
+            project_links: links,
+            tags: Vec::new(),
+            checklist: Vec::new(),
+            created_at: now_utc,
+            updated_at: now_utc,
+        });
+        self.dirty_task_ids.insert(id);
+        self.quick_task_title.clear();
+    }
+
+    fn create_quick_task_in_turn(
+        &mut self,
+        date: NaiveDate,
+        turn: TaskTurn,
+        now_utc: chrono::DateTime<chrono::Utc>,
+    ) {
+        let title = if self.quick_task_title.trim().is_empty() {
+            format!(
+                "Bloco {} ({:02}/{:02})",
+                turn.label(),
+                date.day(),
+                date.month()
+            )
+        } else {
+            self.quick_task_title.trim().to_string()
+        };
+        let links = self
+            .selected_project_id
+            .clone()
+            .or_else(|| self.projects.first().map(|proj| proj.id.clone()))
+            .map(|project_id| {
+                vec![TaskProjectLink {
+                    project_id,
+                    milestone_name: None,
+                }]
+            })
+            .unwrap_or_default();
+
+        let id = EntityId::new_v7();
+        let timestamp = format!("{} {}", date.format("%Y-%m-%d"), turn.default_hour());
+        self.tasks.push(Task {
+            id: id.clone(),
+            title,
+            description_md: String::new(),
+            status: TaskStatus::Todo,
+            priority: TaskPriority::Medium,
+            eisenhower_quadrant: None,
+            pinned_focus: false,
+            start_at: Some(timestamp.clone()),
+            due_at: Some(timestamp),
             recurrence: None,
             estimated_pomos: 1,
             completed_pomos: 0,

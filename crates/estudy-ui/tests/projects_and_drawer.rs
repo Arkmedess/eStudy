@@ -192,3 +192,52 @@ fn should_avoid_dirty_writes_during_typing_and_flush_only_changed_task_on_close(
     assert!(p_end.is_empty());
     assert_eq!(t_end, vec![task_id]);
 }
+
+#[test]
+fn should_switch_to_weekly_turns_create_task_in_turn_and_start_focus_from_task() {
+    let mut app = make_projects_app();
+    let initial_count = app.projects_state.tasks.len();
+
+    app.update(AppMessage::Projects(ProjectsMessage::SwitchFramework(
+        ProjectFramework::WeeklyTurns,
+    )));
+    assert_eq!(
+        app.projects_state.active_framework(),
+        ProjectFramework::WeeklyTurns
+    );
+
+    let day = app.projects_state.selected_day;
+    app.update(AppMessage::Projects(
+        ProjectsMessage::QuickTaskTitleChanged("Revisar Álgebra".to_string()),
+    ));
+    app.update(AppMessage::Projects(
+        ProjectsMessage::CreateQuickTaskInTurn {
+            date: day,
+            turn: estudy_domain::TaskTurn::Afternoon,
+        },
+    ));
+    assert_eq!(app.projects_state.tasks.len(), initial_count + 1);
+    let created = app
+        .projects_state
+        .tasks
+        .last()
+        .expect("tarefa criada no turno");
+    assert_eq!(created.title, "Revisar Álgebra");
+    assert!(
+        created
+            .start_at
+            .as_deref()
+            .is_some_and(|raw| raw.contains("14:00"))
+    );
+
+    let created_id = created.id.clone();
+    app.update(AppMessage::Projects(ProjectsMessage::StartFocusForTask(
+        created_id.clone(),
+    )));
+    assert!(app.focus_state.fullscreen_active);
+    assert_eq!(app.focus_state.active_task_id, Some(created_id));
+    assert_eq!(
+        app.focus_state.active_target_title.as_deref(),
+        Some("Revisar Álgebra")
+    );
+}

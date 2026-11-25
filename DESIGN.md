@@ -8,8 +8,9 @@ Documento oficial de interface, tokens visuais, tipografia, geometria e acessibi
 
 O eStudy combina a calma tátil de uma estação pessoal de estudos com hierarquia editorial clara, acesso rápido por teclado (`Ctrl+K`) e organização por módulos sem poluição visual.
 
-- **Barra lateral fixa fina (`220px`, recolhível com `Ctrl+B`):** lockup editorial `eStudy` no topo, grupos de navegação claros (*Seu Espaço*: Início, Projetos & Tarefas com badge de abertas, Hábitos, Segundo Cérebro, Agenda; *Aprofundamento*: Estudos, Estante, Financeiro, Pomodoro; *Companhia*: Jardim & Pets, Loja) e **cartão do Mascote** no rodapé com fala contextual + atalho para Ajustes.
-- **Barra superior limpa (`44px`):** botão de recolher sidebar, breadcrumb da rota ativa (`eStudy / Início`), busca rápida (`Ctrl+K`), botão primário **Focar** (com timer ao vivo), notificações, seletor rápido de preset e alternador Claro/Escuro.
+- **Barra lateral comprimível e expansível (`220px` $\leftrightarrow$ `64px`, `Ctrl+B`):** botão de comprimir/expandir fixado sempre no canto superior esquerdo (`x = 13px`, `38×36px`) e ícones dentro de slots fixos (`38×36px`) para não deslocarem ao alternar; exibe grupos (*Seu Espaço*, *Aprofundamento*, *Companhia*), badges vivos (*tarefas abertas*, *hábitos `X/Y`*, *notas*) e **cartão do Mascote** no modo expandido.
+- **Barra superior limpa (`44px`):** breadcrumb da rota ativa (`eStudy / Início`), busca rápida (`Ctrl+K`), botão **Espiar Hábitos** (`Eye`) e **Espiar Pomodoro** (`Timer`) abrindo popups leves sobre a tela ativa, notificações, seletor rápido de preset e alternador Claro/Escuro.
+- **Popups de visualização rápida (`QuickPopup` via `modal_surface`):** clicar em uma nota recente na Home ou nos botões de espiar da barra superior abre uma visualização focada (*Nota*, *Hábitos de Hoje* ou *Pomodoro*) sem tirar o usuário da tela atual, fechando com `Esc`.
 - **Home em Painel Bento Editorial:**
   - *Cabeçalho editorial:* saudação em serifa (`Lora`), resumo vivo do dia e pílulas de salto rápido (*Timeline Hoje, Hábitos, Segundo Cérebro, Semana*).
   - *Faixa Bento Hero assimétrica (`5fr / 7fr`):* cartão tonal de **Pulso de Foco (14 dias)** com gráfico de linha/área `SparklineCanvas` e cartão de **Ritmo anual (365 dias)** com `HeatmapGrid` e legenda `Menos ■■■■■ Mais`.

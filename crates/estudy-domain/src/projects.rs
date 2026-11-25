@@ -55,6 +55,8 @@ impl ProjectStatus {
 pub enum ProjectFramework {
     /// Kanban de 4 colunas (padrão).
     Kanban,
+    /// Planejamento semanal dividido em turnos (`Manhã`, `Tarde`, `Noite`).
+    WeeklyTurns,
     /// Marcos & Entregas com barra de progresso automática.
     Milestones,
     /// Matriz de Prioridade 2×2 (Eisenhower).
@@ -64,17 +66,14 @@ pub enum ProjectFramework {
 }
 
 const FRAMEWORK_MAP: &[(ProjectFramework, &str, &str)] = &[
-    (ProjectFramework::Kanban, "kanban", "Kanban Simples"),
+    (ProjectFramework::Kanban, "kanban", "Kanban"),
     (
-        ProjectFramework::Milestones,
-        "milestones",
-        "Marcos & Entregas",
+        ProjectFramework::WeeklyTurns,
+        "weekly_turns",
+        "Semana (Turnos)",
     ),
-    (
-        ProjectFramework::Eisenhower,
-        "eisenhower",
-        "Matriz Eisenhower",
-    ),
+    (ProjectFramework::Milestones, "milestones", "Marcos"),
+    (ProjectFramework::Eisenhower, "eisenhower", "Eisenhower"),
     (
         ProjectFramework::WeeklyFocus,
         "weekly_focus",
@@ -83,9 +82,10 @@ const FRAMEWORK_MAP: &[(ProjectFramework, &str, &str)] = &[
 ];
 
 impl ProjectFramework {
-    /// Todos os 4 frameworks suportados.
-    pub const ALL: [Self; 4] = [
+    /// Todos os 5 frameworks suportados.
+    pub const ALL: [Self; 5] = [
         Self::Kanban,
+        Self::WeeklyTurns,
         Self::Milestones,
         Self::Eisenhower,
         Self::WeeklyFocus,
@@ -148,6 +148,81 @@ impl TaskStatus {
     /// Faz parse do valor persistido no banco.
     pub fn parse(raw: &str) -> Result<Self, DomainError> {
         parse_from_map(TASK_STATUS_MAP, "status da tarefa", raw)
+    }
+}
+
+/// Turno do dia usado na visão semanal por turnos (`Manhã`, `Tarde`, `Noite`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TaskTurn {
+    /// Manhã (`05:00`–`11:59`).
+    Morning,
+    /// Tarde (`12:00`–`17:59`).
+    Afternoon,
+    /// Noite (`18:00`–`23:59`).
+    Evening,
+}
+
+impl TaskTurn {
+    /// Os 3 turnos em ordem cronológica.
+    pub const ALL: [Self; 3] = [Self::Morning, Self::Afternoon, Self::Evening];
+
+    /// Rótulo legível em português.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Morning => "Manhã",
+            Self::Afternoon => "Tarde",
+            Self::Evening => "Noite",
+        }
+    }
+
+    /// Horário padrão sugerido ao criar tarefa rapidamente neste turno.
+    #[must_use]
+    pub const fn default_hour(self) -> &'static str {
+        match self {
+            Self::Morning => "09:00",
+            Self::Afternoon => "14:00",
+            Self::Evening => "19:30",
+        }
+    }
+}
+
+/// Classifica uma tarefa em um turno do dia com base em `start_at` ou `due_at`.
+#[must_use]
+pub fn classify_task_turn(
+    start_at: Option<&str>,
+    due_at: Option<&str>,
+    priority: TaskPriority,
+) -> TaskTurn {
+    let raw = start_at.or(due_at);
+    if let Some(hour) = raw.and_then(extract_hour_hh) {
+        return if hour < 12 {
+            TaskTurn::Morning
+        } else if hour < 18 {
+            TaskTurn::Afternoon
+        } else {
+            TaskTurn::Evening
+        };
+    }
+
+    match priority {
+        TaskPriority::Urgent | TaskPriority::High => TaskTurn::Morning,
+        TaskPriority::Medium => TaskTurn::Afternoon,
+        TaskPriority::Low => TaskTurn::Evening,
+    }
+}
+
+fn extract_hour_hh(raw: &str) -> Option<u8> {
+    let time_part = raw
+        .split_once('T')
+        .or_else(|| raw.split_once(' '))
+        .map_or(raw, |(_, rhs)| rhs);
+    let (hh, _) = time_part.split_once(':')?;
+    let trimmed = hh.trim();
+    if trimmed.len() == 2 {
+        trimmed.parse::<u8>().ok().filter(|&h| h < 24)
+    } else {
+        None
     }
 }
 

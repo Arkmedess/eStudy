@@ -16,7 +16,7 @@ pub use icons::Icon;
 pub use sparkline::{SparklineCanvas, SparklineData};
 pub use theme::{
     BoardFrameStyle, CategoryColor, CosmeticLoadout, EstudyTheme, RADIUS_CARD, RADIUS_CHIP,
-    RADIUS_CONTROL, RADIUS_DRAWER, RADIUS_PANEL, RADIUS_PILL, SIDEBAR_WIDTH, SPACE_1, SPACE_2,
-    SPACE_3, SPACE_4, SPACE_5, SPACE_6, SPACE_8, TOPBAR_HEIGHT, ThemeMode, ThemePreset,
-    contrast_ratio, meets_wcag_aa,
+    RADIUS_CONTROL, RADIUS_DRAWER, RADIUS_PANEL, RADIUS_PILL, SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH,
+    SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_5, SPACE_6, SPACE_8, TOPBAR_HEIGHT, ThemeMode,
+    ThemePreset, contrast_ratio, meets_wcag_aa,
 };

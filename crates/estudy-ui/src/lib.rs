@@ -7,11 +7,12 @@ pub mod app;
 pub mod command_palette;
 pub mod features;
 
-pub use app::{AppMessage, EstudyApp};
+pub use app::{AppMessage, EstudyApp, QuickPopup};
 pub use command_palette::{
     AppRoute, CommandPaletteState, PaletteAction, PaletteCommand, PaletteMessage,
 };
 pub use features::calendar::{CalendarMessage, CalendarState};
+pub use features::habits::{HabitsMessage, HabitsState};
 pub use features::home::{
     FocusPinItem, HomeDashboardData, HomeLoadState, HomeMessage, MAX_FOCUS_PINS, MAX_PINNED_MEDALS,
     MedalBadge, MoodDayEntry, MoodLevel, MoodViewMode, PinboardState, ProfileSummary,
@@ -21,3 +22,4 @@ pub use features::projects::{
     CONTEXT_SIDEBAR_WIDTH, DescriptionTab, ProjectsMessage, ProjectsState, TaskDrawerState,
     UpcomingEventItem,
 };
+pub use features::second_brain::{BrainEditorTab, SecondBrainMessage, SecondBrainState};

@@ -1,14 +1,18 @@
 //! Renderização da fatia Projetos: barra contextual (240px), Kanban, frameworks e Drawer lateral.
 
-use chrono::{Datelike, NaiveDate};
+use chrono::{Datelike, Duration, NaiveDate};
 use estudy_domain::{
     EisenhowerQuadrant, MAX_TASK_CHECKLIST_ITEMS, ProjectFramework, Task, TaskPriority, TaskStatus,
+    TaskTurn, classify_task_turn,
 };
 use estudy_ui_kit::widgets::{
-    card, drawer_backdrop, hairline_divider, icon_svg, panel, pill_chip, progress_track,
-    section_header, segmented_switch, soft_surface, status_badge,
+    card, category_pill, category_tile, color_dot, floating_drawer, hairline_divider, icon_svg,
+    panel, pill_chip, progress_track, section_header, segmented_switch, soft_surface, status_badge,
 };
-use estudy_ui_kit::{EstudyTheme, Icon, SPACE_1, SPACE_2, SPACE_3, SPACE_4};
+use estudy_ui_kit::{
+    CategoryColor, EstudyTheme, FONT_MONO, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD, FONT_SERIF_MEDIUM,
+    Icon, RADIUS_CONTROL, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3, SPACE_4,
+};
 use iced::widget::{button, column, container, row, scrollable, stack, text, text_input};
 use iced::{Alignment, Border, Element, Length};
 use std::collections::BTreeMap;
@@ -248,6 +252,7 @@ fn view_main_workspace<'a, Message: Clone + 'a>(
 
     let board = match state.active_framework() {
         ProjectFramework::Kanban => view_kanban_board(state, theme, &map_msg),
+        ProjectFramework::WeeklyTurns => view_weekly_turns_board(state, theme, &map_msg),
         ProjectFramework::Milestones => view_milestones_board(state, theme, &map_msg),
         ProjectFramework::Eisenhower => view_eisenhower_matrix(state, theme, &map_msg),
         ProjectFramework::WeeklyFocus => view_weekly_focus_board(state, theme, &map_msg),
@@ -270,16 +275,21 @@ fn view_top_toolbar<'a, Message: Clone + 'a>(
     theme: EstudyTheme,
     map_msg: impl Fn(ProjectsMessage) -> Message + 'a,
 ) -> Element<'a, Message> {
-    const FRAMEWORKS: [(ProjectFramework, &str); 4] = [
+    const FRAMEWORKS: [(ProjectFramework, &str); 5] = [
         (ProjectFramework::Kanban, "Kanban"),
+        (ProjectFramework::WeeklyTurns, "Semana"),
         (ProjectFramework::Milestones, "Marcos"),
         (ProjectFramework::Eisenhower, "Eisenhower"),
         (ProjectFramework::WeeklyFocus, "Foco"),
     ];
 
-    let title = state
-        .active_project()
-        .map_or("Todos os Projetos", |proj| proj.title.as_str());
+    let (title, description) = state.active_project().map_or(
+        (
+            "Todos os Projetos",
+            "Visão consolidada de todas as iniciativas",
+        ),
+        |proj| (proj.title.as_str(), proj.description.as_str()),
+    );
     let sidebar_msg = map_msg(ProjectsMessage::ToggleSidebar);
     let fw_switch = segmented_switch(
         &FRAMEWORKS,
@@ -292,8 +302,16 @@ fn view_top_toolbar<'a, Message: Clone + 'a>(
         button(icon_svg(Icon::PanelLeft, 15.0, theme.text_primary))
             .on_press(sidebar_msg)
             .padding(SPACE_2)
-            .style(move |_, status| theme.subtle_button_style(status)),
-        text(title).size(18).color(theme.text_primary),
+            .style(move |_, status| theme.ghost_button_style(status)),
+        category_tile(Icon::FolderKanban, CategoryColor::Slate, 34.0, theme),
+        column![
+            text(title)
+                .size(22)
+                .font(FONT_SERIF_MEDIUM)
+                .color(theme.text_primary),
+            text(description).size(12).color(theme.text_muted),
+        ]
+        .spacing(1.0),
         container(fw_switch)
             .align_x(Alignment::End)
             .width(Length::Fill),
@@ -393,6 +411,164 @@ fn view_kanban_board<'a, Message: Clone + 'a>(
     }
 
     columns_row.into()
+}
+
+fn view_weekly_turns_board<'a, Message: Clone + 'a>(
+    state: &'a ProjectsState,
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let tasks = state.filtered_tasks();
+    let base_day = state.selected_day;
+    let mut days_row = row![].spacing(SPACE_3).width(Length::Fill);
+
+    for offset in 0..5_i64 {
+        let day = base_day + Duration::days(offset);
+        let date_prefix = day.format("%Y-%m-%d").to_string();
+        let day_tasks: Vec<&Task> = tasks
+            .iter()
+            .copied()
+            .filter(|task| {
+                let matches_date = task
+                    .start_at
+                    .as_deref()
+                    .or(task.due_at.as_deref())
+                    .is_some_and(|raw| raw.starts_with(&date_prefix));
+                matches_date || (offset == 0 && task.start_at.is_none() && task.due_at.is_none())
+            })
+            .collect();
+
+        let mut turns_col = column![].spacing(SPACE_2);
+        for turn in TaskTurn::ALL {
+            turns_col = turns_col.push(view_turn_section(day, turn, &day_tasks, theme, map_msg));
+        }
+
+        let header = row![
+            text(short_weekday_pt(day.weekday()))
+                .size(13)
+                .font(FONT_SANS_SEMIBOLD)
+                .color(theme.text_primary),
+            container(
+                text(format!("{:02}/{:02}", day.day(), day.month()))
+                    .size(11)
+                    .font(FONT_MONO)
+                    .color(if offset == 0 {
+                        theme.on_accent
+                    } else {
+                        theme.text_muted
+                    }),
+            )
+            .padding([2.0, 8.0])
+            .style(move |_| container::Style {
+                background: Some(
+                    if offset == 0 {
+                        theme.accent
+                    } else {
+                        theme.surface_soft
+                    }
+                    .into(),
+                ),
+                border: Border {
+                    radius: RADIUS_PILL.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            }),
+        ]
+        .spacing(SPACE_2)
+        .align_y(Alignment::Center);
+
+        days_row = days_row.push(
+            panel(
+                column![
+                    header,
+                    hairline_divider(theme),
+                    scrollable(turns_col).height(Length::Fill),
+                ]
+                .spacing(SPACE_2),
+                theme,
+            )
+            .width(Length::Fill)
+            .height(Length::Fill),
+        );
+    }
+
+    days_row.into()
+}
+
+fn view_turn_section<'a, Message: Clone + 'a>(
+    day: NaiveDate,
+    turn: TaskTurn,
+    day_tasks: &[&'a Task],
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let matching: Vec<&Task> = day_tasks
+        .iter()
+        .copied()
+        .filter(|task| {
+            classify_task_turn(
+                task.start_at.as_deref(),
+                task.due_at.as_deref(),
+                task.priority,
+            ) == turn
+        })
+        .collect();
+
+    let turn_color = match turn {
+        TaskTurn::Morning => CategoryColor::Ochre,
+        TaskTurn::Afternoon => CategoryColor::Sage,
+        TaskTurn::Evening => CategoryColor::Lavender,
+    };
+
+    let mut body = column![
+        row![
+            color_dot(turn_color.solid(theme)),
+            text(turn.label())
+                .size(11)
+                .font(FONT_SANS_SEMIBOLD)
+                .color(theme.text_muted),
+            container(
+                button(icon_svg(Icon::Plus, 12.0, theme.text_muted))
+                    .on_press(map_msg(ProjectsMessage::CreateQuickTaskInTurn {
+                        date: day,
+                        turn,
+                    }))
+                    .padding(3.0)
+                    .style(move |_, status| theme.ghost_button_style(status)),
+            )
+            .align_x(Alignment::End)
+            .width(Length::Fill),
+        ]
+        .spacing(6.0)
+        .align_y(Alignment::Center),
+    ]
+    .spacing(SPACE_1);
+
+    if matching.is_empty() {
+        body = body.push(text("Sem blocos").size(11).color(theme.text_muted));
+    } else {
+        for task in matching {
+            body = body.push(view_task_card(task, theme, map_msg));
+        }
+    }
+
+    soft_surface(body, theme)
+        .padding(SPACE_2)
+        .width(Length::Fill)
+        .into()
+}
+
+const fn short_weekday_pt(weekday: chrono::Weekday) -> &'static str {
+    match weekday {
+        chrono::Weekday::Mon => "Segunda",
+        chrono::Weekday::Tue => "Terça",
+        chrono::Weekday::Wed => "Quarta",
+        chrono::Weekday::Thu => "Quinta",
+        chrono::Weekday::Fri => "Sexta",
+        chrono::Weekday::Sat => "Sábado",
+        chrono::Weekday::Sun => "Domingo",
+    }
 }
 
 fn view_milestones_board<'a, Message: Clone + 'a>(
@@ -545,17 +721,30 @@ fn view_weekly_focus_board<'a, Message: Clone + 'a>(
     scrollable(list).height(Length::Fill).into()
 }
 
+fn priority_category(priority: TaskPriority) -> CategoryColor {
+    match priority {
+        TaskPriority::Urgent => CategoryColor::Coral,
+        TaskPriority::High => CategoryColor::Terracotta,
+        TaskPriority::Medium => CategoryColor::Ochre,
+        TaskPriority::Low => CategoryColor::Slate,
+    }
+}
+
 fn view_task_card<'a, Message: Clone + 'a>(
     task: &'a Task,
     theme: EstudyTheme,
     map_msg: &impl Fn(ProjectsMessage) -> Message,
 ) -> Element<'a, Message> {
+    let category = priority_category(task.priority);
     let (done, total) = task.checklist_progress();
-    let mut meta = row![status_badge(task.priority.label(), theme.accent, theme)].spacing(SPACE_1);
+    let mut meta = row![category_pill(task.priority.label(), category, theme)]
+        .spacing(SPACE_1)
+        .align_y(Alignment::Center);
     if total > 0 {
         meta = meta.push(
             text(format!("{done}/{total}"))
                 .size(11)
+                .font(FONT_MONO)
                 .color(theme.text_muted),
         );
     }
@@ -571,24 +760,37 @@ fn view_task_card<'a, Message: Clone + 'a>(
     };
 
     let open_btn = button(
-        column![text(&task.title).size(13).color(theme.text_primary), meta].spacing(SPACE_1),
+        column![
+            text(&task.title)
+                .size(13)
+                .font(FONT_SANS_SEMIBOLD)
+                .color(theme.text_primary),
+            meta,
+        ]
+        .spacing(SPACE_1),
     )
     .on_press(map_msg(ProjectsMessage::OpenTaskDrawer(task.id.clone())))
     .width(Length::Fill)
     .padding(SPACE_2)
-    .style(move |_, status| theme.subtle_button_style(status));
+    .style(move |_, status| theme.ghost_button_style(status));
 
-    let mut card_col = column![open_btn].spacing(SPACE_1);
+    let focus_btn = button(icon_svg(Icon::Play, 11.0, category.solid(theme)))
+        .on_press(map_msg(ProjectsMessage::StartFocusForTask(task.id.clone())))
+        .padding([4.0, 7.0])
+        .style(move |_, status| theme.subtle_button_style(status));
+
+    let mut actions = row![focus_btn].spacing(SPACE_1).align_y(Alignment::Center);
     if let Some(target_status) = next_status {
-        card_col = card_col.push(
+        actions = actions.push(
             button(
                 row![
                     icon_svg(Icon::ChevronRight, 12.0, theme.text_muted),
-                    text(format!("Mover para {}", target_status.label()))
+                    text(target_status.label())
                         .size(11)
+                        .font(FONT_SANS_MEDIUM)
                         .color(theme.text_muted),
                 ]
-                .spacing(4.0)
+                .spacing(3.0)
                 .align_y(Alignment::Center),
             )
             .on_press(map_msg(ProjectsMessage::MoveTaskStatus(
@@ -596,11 +798,25 @@ fn view_task_card<'a, Message: Clone + 'a>(
                 target_status,
             )))
             .padding([3.0, 6.0])
-            .style(move |_, status| theme.subtle_button_style(status)),
+            .style(move |_, status| theme.ghost_button_style(status)),
         );
     }
 
-    card(card_col, theme).into()
+    let bg = category.tint(theme);
+    let border_color = category.border(theme);
+    container(column![open_btn, actions].spacing(SPACE_1))
+        .padding(SPACE_2)
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(bg.into()),
+            border: Border {
+                color: border_color,
+                width: 1.0,
+                radius: RADIUS_CONTROL.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
 }
 
 fn view_task_drawer<'a, Message: Clone + 'a>(
@@ -629,7 +845,7 @@ fn view_task_drawer<'a, Message: Clone + 'a>(
         body = body.push(status_badge(notice, theme.warning, theme));
     }
 
-    drawer_backdrop(scrollable(body).height(Length::Fill), 420.0, theme)
+    floating_drawer(scrollable(body).height(Length::Fill), 440.0, theme)
 }
 
 fn view_drawer_header<'a, Message: Clone + 'a>(
@@ -637,6 +853,21 @@ fn view_drawer_header<'a, Message: Clone + 'a>(
     theme: EstudyTheme,
     map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
+    let focus_btn = button(
+        row![
+            icon_svg(Icon::Play, 12.0, theme.on_accent),
+            text("Focar")
+                .size(12)
+                .font(FONT_SANS_MEDIUM)
+                .color(theme.on_accent),
+        ]
+        .spacing(4.0)
+        .align_y(Alignment::Center),
+    )
+    .on_press(map_msg(ProjectsMessage::StartFocusForTask(task.id.clone())))
+    .padding([SPACE_1, SPACE_2])
+    .style(move |_, status| theme.pill_button_style(true, status));
+
     let pin_btn = button(
         row![
             icon_svg(
@@ -680,13 +911,14 @@ fn view_drawer_header<'a, Message: Clone + 'a>(
 
     let title_input = text_input("Título da tarefa", &task.title)
         .on_input(move |val| map_msg(ProjectsMessage::DrawerTitleChanged(val)))
-        .padding(SPACE_1)
-        .size(15);
+        .padding(SPACE_2)
+        .size(16)
+        .style(move |_, status| theme.soft_input_style(status));
 
     column![
         row![
             status_badge(task.status.label(), theme.accent, theme),
-            container(row![pin_btn, close_btn].spacing(SPACE_1))
+            container(row![focus_btn, pin_btn, close_btn].spacing(SPACE_1))
                 .align_x(Alignment::End)
                 .width(Length::Fill),
         ]

@@ -5,7 +5,8 @@
 use chrono::{DateTime, Utc};
 use estudy_domain::{
     DomainError, EisenhowerQuadrant, EntityId, MAX_FOCUS_PINNED_TASKS, MAX_TASK_CHECKLIST_ITEMS,
-    ProjectFramework, ProjectStatus, Task, TaskPriority, TaskStatus, validate_focus_pin_budget,
+    ProjectFramework, ProjectStatus, Task, TaskPriority, TaskStatus, TaskTurn, classify_task_turn,
+    validate_focus_pin_budget,
 };
 
 fn sample_utc() -> DateTime<Utc> {
@@ -99,5 +100,37 @@ fn should_compute_milestone_progress_and_enforce_focus_pin_budget() {
         DomainError::FocusPinLimitReached {
             max: MAX_FOCUS_PINNED_TASKS
         }
+    );
+}
+
+#[test]
+fn should_roundtrip_weekly_turns_framework_and_classify_task_turns() {
+    assert_eq!(
+        ProjectFramework::parse(ProjectFramework::WeeklyTurns.as_str()).expect("framework válido"),
+        ProjectFramework::WeeklyTurns
+    );
+    assert_eq!(
+        classify_task_turn(Some("2026-11-24 08:30"), None, TaskPriority::Low),
+        TaskTurn::Morning
+    );
+    assert_eq!(
+        classify_task_turn(None, Some("2026-11-24T14:00"), TaskPriority::High),
+        TaskTurn::Afternoon
+    );
+    assert_eq!(
+        classify_task_turn(Some("20:00"), None, TaskPriority::Medium),
+        TaskTurn::Evening
+    );
+    assert_eq!(
+        classify_task_turn(None, None, TaskPriority::Urgent),
+        TaskTurn::Morning
+    );
+    assert_eq!(
+        classify_task_turn(None, None, TaskPriority::Medium),
+        TaskTurn::Afternoon
+    );
+    assert_eq!(
+        classify_task_turn(None, None, TaskPriority::Low),
+        TaskTurn::Evening
     );
 }
