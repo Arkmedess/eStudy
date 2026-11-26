@@ -3,19 +3,19 @@
 use chrono::NaiveDate;
 use estudy_ui_kit::widgets::{
     card, category_tile, color_dot, editorial_heading, hairline_divider, icon_svg, pill_chip,
-    progress_track, section_header, segmented_switch, soft_surface, status_badge, tonal_card,
+    progress_track, section_header, segmented_switch, soft_surface, tonal_card,
 };
 use estudy_ui_kit::{
-    BoardFrameStyle, CategoryColor, EstudyTheme, FONT_MONO, FONT_MONO_MEDIUM, FONT_SANS_MEDIUM,
-    FONT_SANS_SEMIBOLD, HeatmapGrid, Icon, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3, SPACE_4,
-    SPACE_5, SPACE_6, SparklineCanvas, SparklineData,
+    CategoryColor, EstudyTheme, FONT_MONO, FONT_MONO_MEDIUM, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD,
+    HeatmapGrid, Icon, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_5, SPACE_6,
+    SparklineCanvas, SparklineData,
 };
 use iced::widget::{button, canvas, column, container, row, scrollable, text};
 use iced::{Alignment, Border, Color, Element, Length};
 
 use super::state::{
-    HomeDashboardData, HomeLoadState, HomeMessage, MAX_FOCUS_PINS, MAX_PINNED_MEDALS, MoodLevel,
-    MoodViewMode, ProjectCardSummary,
+    HomeDashboardData, HomeLoadState, HomeMessage, MAX_FOCUS_PINS, MoodLevel, MoodViewMode,
+    ProjectCardSummary,
 };
 use crate::command_palette::AppRoute;
 use crate::features::habits::{HabitsMessage, HabitsState};
@@ -165,26 +165,17 @@ fn view_bento_workspace<'a, Message: Clone + 'a>(
     let header = view_editorial_header(data, greeting, theme, map_home.clone(), map_route.clone());
     let bento_top = view_bento_hero_row(data, theme);
 
-    let inline_life_row = row![
-        view_inline_habits_card(habits, today, theme, map_habits, map_route.clone()),
+    let main_left = column![
+        view_projects_section(&data.projects, theme, map_home.clone(), map_route.clone()),
         view_inline_brain_card(brain, theme, map_brain, map_route.clone()),
     ]
-    .spacing(SPACE_4)
-    .width(Length::Fill);
-
-    let main_left = column![
-        view_projects_section(&data.projects, theme, map_route),
-        inline_life_row,
-        view_today_card(data, theme, map_home.clone()),
-    ]
-    .spacing(SPACE_4)
+    .spacing(SPACE_5)
     .width(Length::FillPortion(8));
 
     let main_right = column![
-        view_profile_card(data, theme),
         view_focus_card(data, theme, map_home.clone()),
-        view_mood_card(data, theme, map_home.clone()),
-        view_pinboard_card(data, theme, map_home),
+        view_inline_habits_card(habits, today, theme, map_habits, map_route),
+        view_mood_card(data, theme, map_home),
     ]
     .spacing(SPACE_4)
     .width(Length::FillPortion(4));
@@ -200,7 +191,7 @@ fn view_bento_workspace<'a, Message: Clone + 'a>(
                     .spacing(SPACE_5)
                     .width(Length::Fill),
             )
-            .max_width(1320.0)
+            .max_width(1420.0)
             .width(Length::Fill),
         )
         .padding([SPACE_5, SPACE_6])
@@ -573,137 +564,10 @@ fn view_annual_heatmap_card<'a, Message: 'a>(
     .into()
 }
 
-fn view_profile_card<'a, Message: 'a>(
-    data: &'a HomeDashboardData,
-    theme: EstudyTheme,
-) -> Element<'a, Message> {
-    let initials: String = data
-        .profile
-        .display_name
-        .chars()
-        .next()
-        .map_or_else(|| "E".to_string(), |ch| ch.to_uppercase().to_string());
-
-    let avatar = container(text(initials).size(18).color(theme.on_accent))
-        .width(Length::Fixed(44.0))
-        .height(Length::Fixed(44.0))
-        .center_x(Length::Fixed(44.0))
-        .center_y(Length::Fixed(44.0))
-        .style(move |_| iced::widget::container::Style {
-            background: Some(theme.accent.into()),
-            border: iced::Border {
-                radius: 22.0.into(),
-                ..iced::Border::default()
-            },
-            ..iced::widget::container::Style::default()
-        });
-
-    let mut medals_row = row![].spacing(SPACE_1);
-    for medal in data.profile.pinned_medals.iter().take(MAX_PINNED_MEDALS) {
-        medals_row = medals_row.push(status_badge(&medal.title, theme.accent, theme));
-    }
-
-    card(
-        column![
-            row![
-                avatar,
-                column![
-                    text(&data.profile.display_name)
-                        .size(16)
-                        .color(theme.text_primary),
-                    row![
-                        icon_svg(Icon::Flame, 14.0, theme.warning),
-                        text(format!("{}d seguidos", data.profile.streak_days))
-                            .size(12)
-                            .color(theme.text_muted),
-                        icon_svg(Icon::Coins, 14.0, theme.accent),
-                        text(format!("{} moedas", data.profile.coins))
-                            .size(12)
-                            .color(theme.text_muted),
-                    ]
-                    .spacing(SPACE_2)
-                    .align_y(Alignment::Center),
-                ]
-                .spacing(SPACE_1),
-            ]
-            .spacing(SPACE_3)
-            .align_y(Alignment::Center),
-            hairline_divider(theme),
-            medals_row,
-        ]
-        .spacing(SPACE_3),
-        theme,
-    )
-    .into()
-}
-
-fn view_today_card<'a, Message: Clone + 'a>(
-    data: &'a HomeDashboardData,
-    theme: EstudyTheme,
-    map_home: impl Fn(HomeMessage) -> Message + 'a,
-) -> Element<'a, Message> {
-    let mut today_list = column![].spacing(SPACE_1);
-    for (idx, item) in data.today_items.iter().enumerate() {
-        let icon = if item.done {
-            Icon::CheckCircle2
-        } else {
-            Icon::Clock
-        };
-        let tint = if item.done {
-            theme.success
-        } else {
-            theme.accent
-        };
-
-        let item_btn = button(
-            row![
-                icon_svg(icon, 15.0, tint),
-                text(&item.time_label).size(12).color(theme.text_muted),
-                text(&item.title).size(13).color(if item.done {
-                    theme.text_muted
-                } else {
-                    theme.text_primary
-                }),
-            ]
-            .spacing(SPACE_2)
-            .align_y(Alignment::Center),
-        )
-        .on_press(map_home(HomeMessage::ToggleTodayItem(idx)))
-        .width(Length::Fill)
-        .padding([SPACE_2, SPACE_2])
-        .style(move |_, status| theme.subtle_button_style(status));
-
-        today_list = today_list.push(item_btn);
-        if idx + 1 < data.today_items.len() {
-            today_list = today_list.push(hairline_divider(theme));
-        }
-    }
-
-    let timeline_action = pill_chip(
-        "Abrir timeline completa",
-        None,
-        Some(Icon::Clock),
-        false,
-        map_home(HomeMessage::OpenTodayTimeline),
-        theme,
-    );
-
-    card(
-        column![
-            section_header(Icon::Calendar, "Hoje", theme),
-            hairline_divider(theme),
-            today_list,
-            timeline_action,
-        ]
-        .spacing(SPACE_3),
-        theme,
-    )
-    .into()
-}
-
 fn view_projects_section<'a, Message: Clone + 'a>(
     projects: &'a [ProjectCardSummary],
     theme: EstudyTheme,
+    map_home: impl Fn(HomeMessage) -> Message + Clone + 'a,
     map_route: impl Fn(AppRoute) -> Message + 'a,
 ) -> Element<'a, Message> {
     let header = row![
@@ -756,6 +620,7 @@ fn view_projects_section<'a, Message: Clone + 'a>(
                 pair_idx * 2 + offset,
                 project,
                 theme,
+                map_home.clone(),
             ));
         }
         if pair.len() == 1 {
@@ -771,10 +636,11 @@ fn view_projects_section<'a, Message: Clone + 'a>(
     .into()
 }
 
-fn view_project_tile_card<'a, Message: 'a>(
+fn view_project_tile_card<'a, Message: Clone + 'a>(
     idx: usize,
     project: &'a ProjectCardSummary,
     theme: EstudyTheme,
+    map_home: impl Fn(HomeMessage) -> Message + 'a,
 ) -> Element<'a, Message> {
     let icons = [
         Icon::Heart,
@@ -813,32 +679,38 @@ fn view_project_tile_card<'a, Message: 'a>(
     .spacing(6.0)
     .align_y(Alignment::Center);
 
-    soft_surface(
-        column![
-            row![
-                category_tile(tile_icon, category, 32.0, theme),
-                column![
-                    text(&project.title)
-                        .size(14)
-                        .font(FONT_SANS_SEMIBOLD)
-                        .color(theme.text_primary),
-                    text(&project.status_label)
-                        .size(11)
-                        .color(category.solid(theme)),
+    button(
+        soft_surface(
+            column![
+                row![
+                    category_tile(tile_icon, category, 32.0, theme),
+                    column![
+                        text(&project.title)
+                            .size(14)
+                            .font(FONT_SANS_SEMIBOLD)
+                            .color(theme.text_primary),
+                        text(&project.status_label)
+                            .size(11)
+                            .color(category.solid(theme)),
+                    ]
+                    .spacing(1.0)
+                    .width(Length::Fill),
                 ]
-                .spacing(1.0)
-                .width(Length::Fill),
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
+                progress_track(ratio, category.solid(theme), theme),
+                counts_row,
             ]
-            .spacing(SPACE_2)
-            .align_y(Alignment::Center),
-            progress_track(ratio, category.solid(theme), theme),
-            counts_row,
-        ]
-        .spacing(SPACE_2),
-        theme,
+            .spacing(SPACE_2),
+            theme,
+        )
+        .padding(SPACE_4)
+        .width(Length::Fill),
     )
-    .padding(SPACE_4)
+    .on_press(map_home(HomeMessage::PreviewProject(project.title.clone())))
+    .padding(0.0)
     .width(Length::Fill)
+    .style(move |_, status| theme.ghost_button_style(status))
     .into()
 }
 
@@ -991,60 +863,6 @@ fn view_mood_card<'a, Message: Clone + 'a>(
 
     card(
         column![header, hairline_divider(theme), body, mood_picker].spacing(SPACE_3),
-        theme,
-    )
-    .into()
-}
-
-fn view_pinboard_card<'a, Message: Clone + 'a>(
-    data: &'a HomeDashboardData,
-    theme: EstudyTheme,
-    map_home: impl Fn(HomeMessage) -> Message + 'a,
-) -> Element<'a, Message> {
-    let active_frame = data.pinboard.frame;
-    let frame_preview = container(
-        column![
-            icon_svg(Icon::Image, 28.0, theme.accent),
-            text(&data.pinboard.caption)
-                .size(13)
-                .color(theme.text_primary),
-            text(format!("Moldura: {}", active_frame.label()))
-                .size(11)
-                .color(theme.text_muted),
-        ]
-        .spacing(SPACE_2)
-        .align_x(Alignment::Center),
-    )
-    .padding(SPACE_4)
-    .width(Length::Fill)
-    .align_x(Alignment::Center)
-    .style(move |_| theme.board_frame_style(active_frame));
-
-    let mut frame_rows = column![].spacing(SPACE_1);
-    for chunk in BoardFrameStyle::ALL.chunks(4) {
-        let mut frame_chips = row![].spacing(SPACE_1);
-        for frame in chunk {
-            let is_active = *frame == active_frame;
-            frame_chips = frame_chips.push(pill_chip(
-                frame.label(),
-                None,
-                None,
-                is_active,
-                map_home(HomeMessage::SelectBoardFrame(*frame)),
-                theme,
-            ));
-        }
-        frame_rows = frame_rows.push(frame_chips);
-    }
-
-    card(
-        column![
-            section_header(Icon::Frame, "Quadro Personalizável", theme),
-            hairline_divider(theme),
-            frame_preview,
-            frame_rows,
-        ]
-        .spacing(SPACE_3),
         theme,
     )
     .into()

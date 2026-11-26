@@ -43,6 +43,8 @@ pub struct HabitsState {
     pub new_title: String,
     /// Texto temporário para descrição/meta de novo hábito.
     pub new_subtitle: String,
+    dirty_habit_ids: BTreeSet<EntityId>,
+    deleted_habit_ids: BTreeSet<EntityId>,
 }
 
 impl HabitsState {
@@ -111,7 +113,18 @@ impl HabitsState {
             view_month: today.month(),
             new_title: String::new(),
             new_subtitle: String::new(),
+            dirty_habit_ids: BTreeSet::new(),
+            deleted_habit_ids: BTreeSet::new(),
         }
+    }
+
+    /// Consome e retorna os conjuntos de hábitos alterados e removidos para persistência seletiva.
+    pub fn take_dirty(&mut self) -> (Vec<EntityId>, Vec<EntityId>) {
+        let dirty = self.dirty_habit_ids.iter().cloned().collect();
+        let deleted = self.deleted_habit_ids.iter().cloned().collect();
+        self.dirty_habit_ids.clear();
+        self.deleted_habit_ids.clear();
+        (dirty, deleted)
     }
 
     /// Quantos hábitos foram concluídos hoje e o total acompanhado.
@@ -133,6 +146,7 @@ impl HabitsState {
             HabitsMessage::ToggleHabitDate { habit_id, date } => {
                 if let Some(habit) = self.habits.iter_mut().find(|h| h.id == habit_id) {
                     habit.toggle_on(date);
+                    self.dirty_habit_ids.insert(habit_id);
                 }
             }
             HabitsMessage::ShiftWeek(delta_weeks) => {
@@ -156,20 +170,24 @@ impl HabitsState {
                 } else {
                     self.new_subtitle.trim().to_string()
                 };
+                let new_id = EntityId::new_v7();
                 let color_index = self.habits.len();
                 self.habits.push(Habit {
-                    id: EntityId::new_v7(),
+                    id: new_id.clone(),
                     title,
                     subtitle,
                     color_index,
                     weekly_goal: 5,
                     completed_dates: BTreeSet::new(),
                 });
+                self.dirty_habit_ids.insert(new_id);
                 self.new_title.clear();
                 self.new_subtitle.clear();
             }
             HabitsMessage::RemoveHabit(id) => {
                 self.habits.retain(|h| h.id != id);
+                self.dirty_habit_ids.remove(&id);
+                self.deleted_habit_ids.insert(id);
             }
         }
     }

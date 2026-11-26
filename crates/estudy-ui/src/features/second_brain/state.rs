@@ -61,6 +61,8 @@ pub struct SecondBrainState {
     pub editor_tab: BrainEditorTab,
     /// Campo temporário de nova tag.
     pub new_tag_input: String,
+    dirty_note_ids: BTreeSet<EntityId>,
+    deleted_note_ids: BTreeSet<EntityId>,
 }
 
 impl SecondBrainState {
@@ -123,7 +125,18 @@ impl SecondBrainState {
             selected_note_id: Some(first_id),
             editor_tab: BrainEditorTab::Preview,
             new_tag_input: String::new(),
+            dirty_note_ids: BTreeSet::new(),
+            deleted_note_ids: BTreeSet::new(),
         }
+    }
+
+    /// Consome e retorna os conjuntos de notas alteradas e removidas para persistência seletiva.
+    pub fn take_dirty(&mut self) -> (Vec<EntityId>, Vec<EntityId>) {
+        let dirty = self.dirty_note_ids.iter().cloned().collect();
+        let deleted = self.deleted_note_ids.iter().cloned().collect();
+        self.dirty_note_ids.clear();
+        self.deleted_note_ids.clear();
+        (dirty, deleted)
     }
 
     /// Lista ordenada de todas as tags únicas presentes nas notas.
@@ -190,38 +203,43 @@ impl SecondBrainState {
                         updated_at: now_utc,
                     },
                 );
+                self.dirty_note_ids.insert(id.clone());
                 self.selected_note_id = Some(id);
                 self.editor_tab = BrainEditorTab::Write;
             }
             SecondBrainMessage::SetEditorTab(tab) => self.editor_tab = tab,
             SecondBrainMessage::TitleChanged(title) => {
-                if let Some(id) = self.selected_note_id.as_ref()
-                    && let Some(note) = self.notes.iter_mut().find(|n| &n.id == id)
+                if let Some(id) = self.selected_note_id.clone()
+                    && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
                 {
                     note.title = title;
                     note.updated_at = now_utc;
+                    self.dirty_note_ids.insert(id);
                 }
             }
             SecondBrainMessage::BodyChanged(body) => {
-                if let Some(id) = self.selected_note_id.as_ref()
-                    && let Some(note) = self.notes.iter_mut().find(|n| &n.id == id)
+                if let Some(id) = self.selected_note_id.clone()
+                    && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
                 {
                     note.body_md = body;
                     note.updated_at = now_utc;
+                    self.dirty_note_ids.insert(id);
                 }
             }
             SecondBrainMessage::KindChanged(kind) => {
-                if let Some(id) = self.selected_note_id.as_ref()
-                    && let Some(note) = self.notes.iter_mut().find(|n| &n.id == id)
+                if let Some(id) = self.selected_note_id.clone()
+                    && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
                 {
                     note.kind = kind;
                     note.updated_at = now_utc;
+                    self.dirty_note_ids.insert(id);
                 }
             }
             SecondBrainMessage::TogglePin(id) => {
                 if let Some(note) = self.notes.iter_mut().find(|n| n.id == id) {
                     note.pinned = !note.pinned;
                     note.updated_at = now_utc;
+                    self.dirty_note_ids.insert(id);
                 }
             }
             SecondBrainMessage::NewTagInputChanged(val) => self.new_tag_input = val,
@@ -234,17 +252,20 @@ impl SecondBrainState {
                 if clean.is_empty() {
                     return;
                 }
-                if let Some(id) = self.selected_note_id.as_ref()
-                    && let Some(note) = self.notes.iter_mut().find(|n| &n.id == id)
+                if let Some(id) = self.selected_note_id.clone()
+                    && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
                     && !note.tags.iter().any(|t| t.eq_ignore_ascii_case(&clean))
                 {
                     note.tags.push(clean);
                     note.updated_at = now_utc;
+                    self.dirty_note_ids.insert(id);
                 }
                 self.new_tag_input.clear();
             }
             SecondBrainMessage::DeleteNote(id) => {
                 self.notes.retain(|n| n.id != id);
+                self.dirty_note_ids.remove(&id);
+                self.deleted_note_ids.insert(id.clone());
                 if self.selected_note_id.as_ref() == Some(&id) {
                     self.selected_note_id = self.notes.first().map(|n| n.id.clone());
                 }

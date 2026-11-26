@@ -22,8 +22,8 @@ pub const SPACE_8: f32 = 32.0;
 pub const TOPBAR_HEIGHT: f32 = 44.0;
 /// Largura padrão da barra lateral principal expandida (`220px`).
 pub const SIDEBAR_WIDTH: f32 = 220.0;
-/// Largura da barra lateral principal comprimida em trilho de ícones (`64px`).
-pub const SIDEBAR_COMPACT_WIDTH: f32 = 64.0;
+/// Largura da barra lateral principal comprimida em trilho de ícones (`72px`).
+pub const SIDEBAR_COMPACT_WIDTH: f32 = 72.0;
 
 /// Raio amplo e orgânico de gavetas flutuantes (`20px`).
 pub const RADIUS_DRAWER: f32 = 20.0;
@@ -272,12 +272,12 @@ impl EstudyTheme {
                 rgb(0xef_ec_e4),
                 rgb(0xff_ff_ff),
                 rgb(0xf4_f1_ea),
-                rgba(0x1f_26_20, 0.08),
-                rgb(0x1c_22_1d),
-                rgb(0x4e_58_4f),
-                rgb(0x4a_5d_4e),
+                rgba(0x1f_26_20, 0.12),
+                rgb(0x14_19_15),
+                rgb(0x3a_44_3b),
+                rgb(0x3f_54_43),
                 rgb(0xff_ff_ff),
-                rgba(0x4a_5d_4e, 0.11),
+                rgba(0x3f_54_43, 0.12),
             ),
             ThemeMode::Dark => Self::make(
                 ThemePreset::OlivaOrganico,
@@ -287,12 +287,12 @@ impl EstudyTheme {
                 rgb(0x1a_1d_18),
                 rgb(0x21_25_1f),
                 rgb(0x28_2d_25),
-                rgba(0xff_ff_ff, 0.09),
-                rgb(0xec_f0_ea),
-                rgb(0xab_b5_a8),
-                rgb(0xa3_b8_99),
+                rgba(0xff_ff_ff, 0.12),
+                rgb(0xf4_f7_f2),
+                rgb(0xc2_cb_bf),
+                rgb(0xa8_be_9e),
                 rgb(0x12_14_11),
-                rgba(0xa3_b8_99, 0.16),
+                rgba(0xa8_be_9e, 0.18),
             ),
         }
     }
@@ -307,12 +307,12 @@ impl EstudyTheme {
                 rgb(0x0f_10_15),
                 rgb(0x13_14_1a),
                 rgb(0x1a_1c_24),
-                rgba(0xff_ff_ff, 0.09),
-                rgb(0xf1_f5_f9),
-                rgb(0x9c_a8_b8),
+                rgba(0xff_ff_ff, 0.12),
+                rgb(0xf8_fa_fc),
+                rgb(0xb8_c4_d4),
                 rgb(0x86_ef_ac),
                 rgb(0x07_07_09),
-                rgba(0x86_ef_ac, 0.15),
+                rgba(0x86_ef_ac, 0.16),
             ),
             ThemeMode::Light => Self::make(
                 ThemePreset::EstudyMenta,
@@ -322,12 +322,12 @@ impl EstudyTheme {
                 rgb(0xf1_f5_f9),
                 rgb(0xff_ff_ff),
                 rgb(0xf4_f8_fb),
-                rgba(0x0f_17_2a, 0.08),
-                rgb(0x0f_17_2a),
-                rgb(0x47_55_69),
+                rgba(0x0f_17_2a, 0.11),
+                rgb(0x0a_10_1f),
+                rgb(0x33_41_55),
                 rgb(0x15_80_3d),
                 rgb(0xff_ff_ff),
-                rgba(0x15_80_3d, 0.11),
+                rgba(0x15_80_3d, 0.12),
             ),
         }
     }

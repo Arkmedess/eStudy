@@ -195,6 +195,10 @@ pub enum HomeMessage {
     OpenCalendarWeek,
     /// Inicia sessão Pomodoro a partir de um item "Em foco".
     StartFocusForPin(String),
+    /// Abre popup rápido de visão geral de um projeto sem sair da Home.
+    PreviewProject(String),
+    /// Abre popup rápido de uma tarefa/item em foco sem sair da Home.
+    PreviewFocusPin(String),
     /// Simula/dispara recarregamento após erro.
     RetryLoad,
     /// Cria o primeiro projeto ou tarefa a partir do estado vazio.

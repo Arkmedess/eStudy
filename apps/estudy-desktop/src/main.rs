@@ -5,8 +5,8 @@ use estudy_audio::AudioController;
 use estudy_domain::{EntityId, SystemClock};
 use estudy_storage::{
     AppPaths, SearchEntityKind, SqliteCalendarRepository, SqliteFocusRepository,
-    SqliteProjectRepository, SqliteSearchRepository, StorageError, apply_migrations,
-    open_connection,
+    SqliteHabitsRepository, SqliteProjectRepository, SqliteSearchRepository,
+    SqliteSecondBrainRepository, StorageError, apply_migrations, open_connection,
 };
 use estudy_ui::features::focus::FocusMessage;
 use estudy_ui::{
@@ -78,6 +78,17 @@ impl DesktopShell {
                 ));
                 let mut app =
                     EstudyApp::with_state(clock, home_state, projects_state, calendar_state);
+                if let Ok(habits) = SqliteHabitsRepository::list_habits(&conn)
+                    && !habits.is_empty()
+                {
+                    app.habits_state.habits = habits;
+                }
+                if let Ok(notes) = SqliteSecondBrainRepository::list_notes(&conn)
+                    && !notes.is_empty()
+                {
+                    app.second_brain_state.selected_note_id = notes.first().map(|n| n.id.clone());
+                    app.second_brain_state.notes = notes;
+                }
                 app.focus_state.today_focused_minutes = today_focus;
                 let boot_ms = u64::try_from(boot_started.elapsed().as_millis()).unwrap_or(u64::MAX);
                 tracing::info!(
@@ -176,6 +187,44 @@ impl DesktopShell {
         }
     }
 
+    fn persist_habits_and_notes(
+        conn: &mut Connection,
+        habits: &[estudy_domain::Habit],
+        notes: &[estudy_domain::KnowledgeNote],
+        dirty_habits: &[EntityId],
+        deleted_habits: &[EntityId],
+        dirty_notes: &[EntityId],
+        deleted_notes: &[EntityId],
+    ) -> usize {
+        let now_utc = Utc::now();
+        let mut persisted = 0_usize;
+        for habit_id in dirty_habits {
+            if let Some(habit) = habits.iter().find(|item| item.id == *habit_id)
+                && SqliteHabitsRepository::save_habit(conn, habit, now_utc).is_ok()
+            {
+                persisted += 1;
+            }
+        }
+        for habit_id in deleted_habits {
+            if SqliteHabitsRepository::delete_habit(conn, habit_id, now_utc).is_ok() {
+                persisted += 1;
+            }
+        }
+        for note_id in dirty_notes {
+            if let Some(note) = notes.iter().find(|item| item.id == *note_id)
+                && SqliteSecondBrainRepository::save_note(conn, note).is_ok()
+            {
+                persisted += 1;
+            }
+        }
+        for note_id in deleted_notes {
+            if SqliteSecondBrainRepository::delete_note(conn, note_id, now_utc).is_ok() {
+                persisted += 1;
+            }
+        }
+        persisted
+    }
+
     fn persist_dirty_changes(&mut self) {
         let Some(conn) = &mut self.conn else {
             return;
@@ -183,17 +232,31 @@ impl DesktopShell {
 
         let (dirty_projects, dirty_tasks) = self.app.projects_state.take_dirty();
         let dirty_events = self.app.calendar_state.take_dirty_events();
+        let (dirty_habits, deleted_habits) = self.app.habits_state.take_dirty();
+        let (dirty_notes, deleted_notes) = self.app.second_brain_state.take_dirty();
         let pending_focus = self.app.focus_state.take_pending_sessions();
         if dirty_projects.is_empty()
             && dirty_tasks.is_empty()
             && dirty_events.is_empty()
+            && dirty_habits.is_empty()
+            && deleted_habits.is_empty()
+            && dirty_notes.is_empty()
+            && deleted_notes.is_empty()
             && pending_focus.is_empty()
         {
             return;
         }
 
         let started = Instant::now();
-        let mut persisted = 0_usize;
+        let mut persisted = Self::persist_habits_and_notes(
+            conn,
+            &self.app.habits_state.habits,
+            &self.app.second_brain_state.notes,
+            &dirty_habits,
+            &deleted_habits,
+            &dirty_notes,
+            &deleted_notes,
+        );
 
         for proj_id in &dirty_projects {
             if let Some(project) = self

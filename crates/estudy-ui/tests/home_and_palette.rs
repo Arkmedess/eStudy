@@ -188,11 +188,11 @@ fn should_toggle_nav_sidebar_navigate_new_modules_and_compute_mascot_message() {
         HomeLoadState::Ready(Box::new(HomeDashboardData::sample_workspace("Arthur"))),
     );
 
-    assert!(app.nav_sidebar_open);
-    app.update(AppMessage::ToggleNavSidebar);
     assert!(!app.nav_sidebar_open);
     app.update(AppMessage::ToggleNavSidebar);
     assert!(app.nav_sidebar_open);
+    app.update(AppMessage::ToggleNavSidebar);
+    assert!(!app.nav_sidebar_open);
 
     for route in [
         AppRoute::Habits,
