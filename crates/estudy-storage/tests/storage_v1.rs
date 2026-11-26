@@ -60,7 +60,10 @@ fn should_apply_wal_pragmas_and_migrate_all_v1_tables_idempotently() {
 
     let first_run =
         apply_migrations(&mut conn, Some(&paths.backups_dir()), fixed_now(0)).expect("migração v1");
-    assert_eq!(first_run.applied_versions, vec![LATEST_SCHEMA_VERSION]);
+    assert_eq!(
+        first_run.applied_versions,
+        (1..=LATEST_SCHEMA_VERSION).collect::<Vec<_>>()
+    );
     assert_eq!(first_run.current_version, LATEST_SCHEMA_VERSION);
 
     let second_run = apply_migrations(&mut conn, Some(&paths.backups_dir()), fixed_now(5))

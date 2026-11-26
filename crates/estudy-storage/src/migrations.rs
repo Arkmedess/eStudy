@@ -8,8 +8,8 @@ use std::path::Path;
 use crate::error::StorageError;
 use crate::snapshot::{MAX_PRE_MIGRATION_BACKUPS, create_pre_migration_backup};
 
-/// Versão atual do schema relacional baseline (`v0.0.1`).
-pub const LATEST_SCHEMA_VERSION: u32 = 1;
+/// Versão atual do schema relacional (`v0.6.1`).
+pub const LATEST_SCHEMA_VERSION: u32 = 2;
 
 struct Migration {
     version: u32,
@@ -17,11 +17,18 @@ struct Migration {
     sql: &'static str,
 }
 
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial_v1",
-    sql: include_str!("../migrations/0001_initial_v1.sql"),
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial_v1",
+        sql: include_str!("../migrations/0001_initial_v1.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "habits_and_weekly_turns_v2",
+        sql: include_str!("../migrations/0002_habits_and_weekly_turns.sql"),
+    },
+];
 
 /// Resultado resumido de uma execução de migrações.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,14 +111,20 @@ fn apply_single_migration(
     applied_at: &str,
 ) -> Result<(), StorageError> {
     let checksum = hex::encode(Sha256::digest(migration.sql.as_bytes()));
-    let tx = conn.transaction()?;
-    tx.execute_batch(migration.sql)?;
-    tx.execute(
-        "INSERT INTO schema_migrations (version, name, checksum_sha256, applied_at) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![migration.version, migration.name, checksum, applied_at],
-    )?;
-    tx.commit()?;
-    Ok(())
+    // Desativa FKs fora da transação (exigência do SQLite para rebuild de tabela) e reativa ao final.
+    conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let res = (|| -> Result<(), StorageError> {
+        let tx = conn.transaction()?;
+        tx.execute_batch(migration.sql)?;
+        tx.execute(
+            "INSERT INTO schema_migrations (version, name, checksum_sha256, applied_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![migration.version, migration.name, checksum, applied_at],
+        )?;
+        tx.commit()?;
+        Ok(())
+    })();
+    let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+    res
 }
 
 fn verify_database_integrity(conn: &Connection) -> Result<(), StorageError> {
