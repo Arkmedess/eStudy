@@ -8,6 +8,22 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
+## [0.6.1] - 2026-11-25
+
+### Adicionado
+- **Persistência SQLite v2 (`0002_habits_and_weekly_turns.sql`)**: suporte a `weekly_turns` no `CHECK` de `projects`, novas tabelas `habits` e `habit_logs`, repositórios `SqliteHabitsRepository` e `SqliteSecondBrainRepository` (integrado a `notes` + `FTS5`) e sincronização seletiva (*dirty tracking*) em `apps/estudy-desktop`.
+- **Popups de Projeto e Tarefa (`QuickPopup::ProjectOverview`, `QuickPopup::TaskQuick`)**: clicar em um card de Projeto na Home abre visão rápida com tarefas clicáveis e botão `Play` para iniciar o Pomodoro sem sair da tela.
+- **Barra de Status Inferior Sob Demanda (`34px`)**: aparece somente quando há Pomodoro ativo ou aviso transitório, liberando 100% da altura quando inativa.
+- **Tela funcional de Ajustes (`AppRoute::Settings`)**: seletor direto dos 5 presets de tema, alternância Claro/Escuro e mapa de atalhos (`Ctrl+K`, `Ctrl+B`, `Esc`).
+- **Suíte de Testes de Usabilidade (`crates/estudy-ui/tests/usability_flows.rs`)**: 7 jornadas ponta-a-ponta (`UF-01` a `UF-07`) cobrindo ações rápidas sem sair da tela, foco em 1 clique, pilha do `Esc`, regra anti-dupla-sidebar e zero *dead ends*.
+
+### Aprimorado
+- **Barra Lateral Sobreposta (Zero Reflow)**: trilho compacto de `72px` com micro-labels legíveis e ícones literais (`CheckSquare` para Projetos, `BookOpen` para Notas); ao expandir (`248px`), sobrepõe o palco via `stack!` com *scrim* clicável, exibindo apenas as 5 rotas ativas + *Ações Rápidas* + *Ajustes*.
+- **Header Opinativo (`48px`) e Home Enxuta**: busca centralizada (`Ctrl+K`), 4 utilitários transversais (`Hoje`, `Hábitos X/Y`, `Focar`, `Notificações`) e remoção do cartão decorativo de perfil e do bloco "Hoje" duplicado na Home.
+- **Contraste Tipográfico e Fluidez**: aprofundamento de `text_primary`, `text_muted` e bordas sutis em `OlivaOrganico` e `EstudyMenta` (Light/Dark), correção do disparo imediato do timer no botão `Play` de tarefas e remoção da feature `crisp` no `tiny-skia`.
+
+---
+
 ## [0.6.0] - 2026-11-25
 
 ### Adicionado
@@ -120,7 +136,8 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
-[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/Arkmedess/eStudy/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Arkmedess/eStudy/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Arkmedess/eStudy/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/Arkmedess/eStudy/compare/v0.4.0...v0.4.1

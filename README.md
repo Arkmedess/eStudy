@@ -2,7 +2,7 @@
 
 Aplicativo desktop local-first de produtividade pessoal em **Rust**, reunindo **Home Pessoal, Projetos, Hábitos, Segundo Cérebro, Calendário Unificado/Hoje, Estudos, Estante de Leituras, Foco/Áudio e Gamificação leve** em um único binário nativo com consumo alvo de **20–45 MB de RAM** (atualmente ~35 MiB em repouso no backend padrão `tiny-skia`).
 
-> **Status atual:** `v0.6.0` — Tipografia embutida (`Plus Jakarta Sans`, `Lora`, `JetBrains Mono`), barra lateral recolhível estável (`220px` <-> `64px`) com mascote contextual, Home em Painel Bento com *Hábitos de Hoje* e *Segundo Cérebro* inline, Popups rápidos sem trocar de tela, Projetos com visão semanal por turnos (`Manhã/Tarde/Noite`) e disparo direto para o Pomodoro, módulos completos de **Hábitos** e **Segundo Cérebro**, Calendário Unificado, Gaveta Flutuante "Hoje", `Ctrl+K` com `FTS5` e Modo Foco com áudio procedural DSP (`-16 LUFS`).
+> **Status atual:** `v0.6.1` — Barra lateral sobreposta (zero reflow) com micro-labels no trilho `72px` e 5 rotas reais sem *dead ends*, Header opinativo (`Hoje`, `Hábitos X/Y`, `Focar`, `Ctrl+K`), Barra de Status inferior sob demanda, Popups rápidos de Projeto/Tarefa/Nota/Hábitos/Foco sem sair da tela, tela funcional de **Ajustes** com contraste reforçado, persistência **SQLite v2** (Hábitos, Segundo Cérebro `FTS5` e `weekly_turns`) e suíte de testes de usabilidade (`70/70`). Para scroll nativo em 60–144 FPS use `--features gpu` (`wgpu`); o modo padrão `tiny-skia` prioriza RAM mínima (`~35 MiB`).
 
 ---
 

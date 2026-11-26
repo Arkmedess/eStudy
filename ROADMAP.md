@@ -36,10 +36,10 @@ Plano incremental de entregas do **eStudy**. Cada marco entrega um conjunto func
   - Módulo de Hábitos (grade semanal, constância mensal em barras e calendário) e Segundo Cérebro (*master-detail* na mesma tela com editor `Visualizar | Escrever`, tipos e tags).
   - Barra lateral recolhível sem deslocamento de ícones (`220px` <-> `64px`), Popups rápidos (`QuickPopup`) sem trocar de tela e otimização de scroll em CPU (`HeatmapGrid` em batch + cache no `SparklineCanvas`).
 
-- **v0.6.1 — Estudo de Usabilidade, Fluxo Sem Redundâncias, UI Opinativa e Persistência v2** *(Próximo)*
-  - Eliminação de redundâncias de navegação e controles duplicados entre Topbar, Sidebar, Home e módulos (fluxograma único de entrada e ação).
-  - Refinamento visual para romper o aspecto "engessado" (ritmo editorial assimétrico, superfícies táteis leves em `tiny-skia`, ações contextuais inline e micro-popovers sem sair da tela) mantendo teto `< 45 MiB` de RAM.
-  - Bateria de testes automatizados de fluxo de uso (jornadas ponta-a-ponta do usuário em MVU) e migração SQLite v2 (persistência real de Hábitos, Segundo Cérebro, `weekly_turns` e Financeiro).
+- **v0.6.1 — Estudo de Usabilidade, Fluxo Sem Redundâncias, UI Opinativa e Persistência v2** *(Concluído)*
+  - Barra lateral sobreposta (zero reflow) com micro-labels no trilho `72px`, header opinativo (`Hoje`, `Hábitos X/Y`, `Focar`, `Ctrl+K`), barra de status inferior sob demanda, tela de Ajustes e eliminação de rotas *dead-end*.
+  - Popups rápidos de Projeto e Tarefa sem sair da Home, contraste tipográfico reforçado e remoção de `crisp` no `tiny-skia` (com medição empírica `tiny-skia` vs `wgpu --features gpu`).
+  - Suíte de testes de usabilidade (`usability_flows.rs` com 7 jornadas) e migração SQLite v2 (`0002_habits_and_weekly_turns.sql`) persistindo Hábitos, Segundo Cérebro (`FTS5`) e `weekly_turns`.
   - Especificação completa em [docs/ux-architecture-0.6.1.md](./docs/ux-architecture-0.6.1.md).
 
 - **v0.7.0 — Módulo de Estudos Completo e Estante de Leituras**
