@@ -133,4 +133,9 @@ fn should_roundtrip_weekly_turns_framework_and_classify_task_turns() {
         classify_task_turn(None, None, TaskPriority::Low),
         TaskTurn::Evening
     );
+    assert_eq!(TaskTurn::Anytime.label(), "Qualquer hora");
+    assert_eq!(
+        classify_task_turn(Some("2026-11-24"), None, TaskPriority::High),
+        TaskTurn::Anytime
+    );
 }

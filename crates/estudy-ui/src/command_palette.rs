@@ -4,7 +4,9 @@ use estudy_domain::EntityId;
 use estudy_ui_kit::widgets::{
     empty_placeholder, hairline_divider, icon_svg, kbd_hint, modal_surface,
 };
-use estudy_ui_kit::{EstudyTheme, Icon, SPACE_2, SPACE_3};
+use estudy_ui_kit::{
+    EstudyTheme, FONT_SIZE_BASE, FONT_SIZE_LG, FONT_SIZE_SM, FONT_SIZE_XL, Icon, SPACE_2, SPACE_3,
+};
 use iced::widget::{button, column, row, scrollable, text, text_input};
 use iced::{Alignment, Element, Length};
 
@@ -43,9 +45,9 @@ impl AppRoute {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Home => "Início",
-            Self::Projects => "Projetos & Tarefas",
+            Self::Projects => "Tarefas",
             Self::Habits => "Hábitos",
-            Self::SecondBrain => "Segundo Cérebro",
+            Self::SecondBrain => "Segundo cérebro",
             Self::Calendar => "Agenda",
             Self::Studies => "Estudos",
             Self::Bookshelf => "Estante",
@@ -275,13 +277,13 @@ impl CommandPaletteState {
         })
         .on_submit(map_msg(PaletteMessage::ExecuteSelected))
         .padding(SPACE_3)
-        .size(15)
+        .size(FONT_SIZE_XL)
         .style(move |_, status| theme.soft_input_style(status));
 
         let header = row![
-            icon_svg(Icon::Command, 18.0, theme.accent),
+            icon_svg(Icon::Command, 19.0, theme.accent),
             query_input,
-            button(icon_svg(Icon::X, 16.0, theme.text_muted))
+            button(icon_svg(Icon::X, 17.0, theme.text_muted))
                 .on_press(map_msg(PaletteMessage::Close))
                 .padding(SPACE_2)
                 .style(move |_, status| theme.subtle_button_style(status)),
@@ -302,10 +304,14 @@ impl CommandPaletteState {
             for (idx, cmd) in filtered.iter().enumerate() {
                 let is_selected = idx == self.selected_index;
                 let mut row_content = row![
-                    icon_svg(cmd.icon, 16.0, theme.accent),
+                    icon_svg(cmd.icon, 18.0, theme.accent),
                     column![
-                        text(cmd.label.clone()).size(14).color(theme.text_primary),
-                        text(cmd.hint.clone()).size(12).color(theme.text_muted),
+                        text(cmd.label.clone())
+                            .size(FONT_SIZE_LG)
+                            .color(theme.text_primary),
+                        text(cmd.hint.clone())
+                            .size(FONT_SIZE_BASE)
+                            .color(theme.text_muted),
                     ]
                     .spacing(2.0)
                     .width(Length::Fill),
@@ -332,16 +338,16 @@ impl CommandPaletteState {
                     });
                 list = list.push(item_btn);
             }
-            scrollable(list).height(Length::Fixed(320.0)).into()
+            scrollable(list).height(Length::Fixed(360.0)).into()
         };
 
         let footer = row![
             kbd_hint("Enter", theme),
-            text("executar").size(11).color(theme.text_muted),
+            text("executar").size(FONT_SIZE_SM).color(theme.text_muted),
             kbd_hint("Esc", theme),
-            text("fechar").size(11).color(theme.text_muted),
+            text("fechar").size(FONT_SIZE_SM).color(theme.text_muted),
             kbd_hint("Ctrl+K", theme),
-            text("alternar").size(11).color(theme.text_muted),
+            text("alternar").size(FONT_SIZE_SM).color(theme.text_muted),
         ]
         .spacing(SPACE_2)
         .align_y(Alignment::Center);
@@ -355,7 +361,7 @@ impl CommandPaletteState {
                 footer
             ]
             .spacing(SPACE_3),
-            620.0,
+            660.0,
             theme,
         )
     }

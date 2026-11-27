@@ -1,13 +1,14 @@
 //! Sandbox isolado de visualização dos componentes do `estudy-ui-kit`.
 
 use estudy_ui_kit::widgets::{
-    banner_toast, card, empty_placeholder, hairline_divider, icon_svg, kbd_hint, metric_stat,
-    pill_chip, progress_track, section_header, segmented_switch, soft_surface, status_badge,
-    tonal_card,
+    banner_toast, card, editorial_page_header, empty_placeholder, hairline_divider, icon_svg,
+    illustrated_svg, kbd_hint, metric_stat, pill_chip, progress_track, section_header,
+    segmented_switch, shaped_text, soft_surface, status_badge, tonal_card,
 };
 use estudy_ui_kit::{
-    BoardFrameStyle, EstudyTheme, FONT_SANS, HeatmapData, HeatmapGrid, Icon, SPACE_2, SPACE_3,
-    SPACE_4, SPACE_6, ThemeMode, ThemePreset, embedded_fonts,
+    BoardFrameStyle, EstudyTheme, FONT_SANS, FONT_SANS_MEDIUM, FONT_SIZE_BASE, FONT_SIZE_MD,
+    FONT_SIZE_SM, FONT_SIZE_XL, FONT_SIZE_XS, HeatmapData, HeatmapGrid, Icon, IllustratedIcon,
+    SPACE_2, SPACE_3, SPACE_4, SPACE_6, ThemeMode, ThemePreset, embedded_fonts,
 };
 use iced::widget::{button, canvas, column, container, row, scrollable, text};
 use iced::{Alignment, Element, Length};
@@ -77,16 +78,22 @@ impl PreviewApp {
             theme,
         );
 
-        let header = row![
-            section_header(Icon::Palette, "eStudy UI Kit Preview", theme),
-            status_badge("WCAG 2.2 AA", theme.success, theme),
-            kbd_hint("Ctrl+K", theme),
-            container(mode_btn)
-                .align_x(Alignment::End)
-                .width(Length::Fill),
-        ]
-        .spacing(SPACE_3)
-        .align_y(Alignment::Center);
+        let header = editorial_page_header(
+            "ESTUDY  /  UI KIT PREVIEW",
+            "Design System",
+            "Newsreader, DM Sans e ícones ilustrados",
+            Some(
+                row![
+                    status_badge("WCAG 2.2 AA", theme.success, theme),
+                    kbd_hint("Ctrl+K", theme),
+                    mode_btn,
+                ]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center)
+                .into(),
+            ),
+            theme,
+        );
 
         let middle_row = row![
             self.view_frames_card(theme).width(Length::FillPortion(1)),
@@ -120,6 +127,7 @@ impl PreviewApp {
                     theme,
                 ),
                 self.view_primitives_showcase(theme),
+                view_illustrated_icons_card(theme),
                 middle_row,
                 view_icons_card(theme),
             ]
@@ -180,9 +188,11 @@ impl PreviewApp {
             .width(Length::Fill),
             tonal_card(
                 column![
-                    text("Foco ativo").size(11).color(theme.on_accent),
-                    text("25:00").size(22).color(theme.on_accent),
-                    text("Bloco pronto").size(11).color(theme.on_accent),
+                    text("Foco ativo").size(FONT_SIZE_SM).color(theme.on_accent),
+                    text("25:00").size(FONT_SIZE_XL).color(theme.on_accent),
+                    text("Bloco pronto")
+                        .size(FONT_SIZE_SM)
+                        .color(theme.on_accent),
                 ]
                 .spacing(4.0),
                 theme,
@@ -204,7 +214,9 @@ impl PreviewApp {
                 hairline_divider(theme),
                 stats,
                 row![
-                    text("Meta do ciclo · 68%").size(12).color(theme.text_muted),
+                    text("Meta do ciclo · 68%")
+                        .size(FONT_SIZE_BASE)
+                        .color(theme.text_muted),
                     progress_track(0.68, theme.accent, theme),
                 ]
                 .spacing(SPACE_3)
@@ -214,11 +226,15 @@ impl PreviewApp {
                     "Estado vazio acolhedor",
                     "Orientação clara sem ruído visual excessivo.",
                     Some(
-                        button(text("Criar item").size(12).color(theme.on_accent))
-                            .on_press(PreviewMessage::SelectFilter(PreviewFilter::All))
-                            .padding([6.0, 14.0])
-                            .style(move |_, status| theme.pill_button_style(true, status))
-                            .into(),
+                        button(
+                            text("Criar item")
+                                .size(FONT_SIZE_BASE)
+                                .color(theme.on_accent),
+                        )
+                        .on_press(PreviewMessage::SelectFilter(PreviewFilter::All))
+                        .padding([6.0, 14.0])
+                        .style(move |_, status| theme.pill_button_style(true, status))
+                        .into(),
                     ),
                     theme,
                 ),
@@ -252,7 +268,7 @@ impl PreviewApp {
             row![
                 icon_svg(Icon::Image, 24.0, theme.accent),
                 text(format!("Moldura ativa: {}", active_frame.label()))
-                    .size(13)
+                    .size(FONT_SIZE_MD)
                     .color(theme.text_primary),
             ]
             .spacing(SPACE_2)
@@ -275,6 +291,54 @@ impl PreviewApp {
     }
 }
 
+fn view_illustrated_icons_card<'a>(theme: EstudyTheme) -> Element<'a, PreviewMessage> {
+    let mut rows = column![].spacing(SPACE_2).width(Length::Fill);
+    for chunk in IllustratedIcon::ALL.chunks(6) {
+        let mut line = row![].spacing(SPACE_2).width(Length::Fill);
+        for icon in chunk {
+            line = line.push(
+                soft_surface(
+                    column![
+                        illustrated_svg(*icon, 28.0),
+                        shaped_text(
+                            icon.name(),
+                            FONT_SIZE_XS,
+                            FONT_SANS_MEDIUM,
+                            theme.text_muted
+                        ),
+                    ]
+                    .spacing(4.0)
+                    .align_x(Alignment::Center)
+                    .width(Length::Fill),
+                    theme,
+                )
+                .padding(SPACE_2)
+                .width(Length::FillPortion(1)),
+            );
+        }
+        for _ in chunk.len()..6 {
+            line = line.push(container(text("")).width(Length::FillPortion(1)));
+        }
+        rows = rows.push(line);
+    }
+
+    card(
+        column![
+            section_header(
+                Icon::Palette,
+                "17 Ícones Ilustrados Multi-Cor + Mascote Mochi",
+                theme
+            ),
+            hairline_divider(theme),
+            rows,
+        ]
+        .spacing(SPACE_3),
+        theme,
+    )
+    .width(Length::Fill)
+    .into()
+}
+
 fn view_icons_card<'a>(theme: EstudyTheme) -> Element<'a, PreviewMessage> {
     let mut icons_grid = column![].spacing(SPACE_2).width(Length::Fill);
     for chunk in Icon::ALL.chunks(9) {
@@ -284,7 +348,7 @@ fn view_icons_card<'a>(theme: EstudyTheme) -> Element<'a, PreviewMessage> {
                 soft_surface(
                     column![
                         icon_svg(*icon, 20.0, theme.text_primary),
-                        text(icon.name()).size(10).color(theme.text_muted),
+                        text(icon.name()).size(FONT_SIZE_XS).color(theme.text_muted),
                     ]
                     .spacing(4.0)
                     .align_x(Alignment::Center)

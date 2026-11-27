@@ -1,9 +1,11 @@
-//! Fatia vertical Projetos (Kanban 4 colunas, Frameworks Leves e Drawer da Tarefa).
+//! Fatia Tarefas & Projetos (`Semana | Calendário | Kanban`, Drag & Drop, Menu de Contexto e Modais).
 
+pub mod modals;
 pub mod state;
 pub mod view;
 
 pub use state::{
-    DescriptionTab, ProjectsMessage, ProjectsState, TaskDrawerState, UpcomingEventItem,
+    ContextSubmenu, DescriptionTab, DragTarget, ProjectsMessage, ProjectsState, TaskContextMenu,
+    TaskDrawerState, TaskModalMode, TaskModalState, TasksViewMode, UpcomingEventItem,
 };
 pub use view::{CONTEXT_SIDEBAR_WIDTH, view_projects};

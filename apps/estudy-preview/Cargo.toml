@@ -11,5 +11,10 @@ description = "Sandbox isolado para inspecionar presets, ícones SVG, molduras e
 estudy-ui-kit = { path = "../../crates/estudy-ui-kit" }
 iced.workspace = true
 
+[features]
+default = ["gpu"]
+gpu = ["iced/wgpu"]
+cpu = []
+
 [lints]
 workspace = true

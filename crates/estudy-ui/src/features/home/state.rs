@@ -199,6 +199,14 @@ pub enum HomeMessage {
     PreviewProject(String),
     /// Abre popup rápido de uma tarefa/item em foco sem sair da Home.
     PreviewFocusPin(String),
+    /// Abre diretamente o modal de criação rápida de tarefa a partir do Hero da Home.
+    QuickCreateTask,
+    /// Navega para Hábitos focando a criação rápida a partir do Hero da Home.
+    QuickCreateHabit,
+    /// Abre o formulário de novo compromisso na Agenda a partir do Hero da Home.
+    QuickCreateEvent,
+    /// Cria e abre uma nova nota multi-linha a partir do Hero da Home.
+    QuickCreateNote,
     /// Simula/dispara recarregamento após erro.
     RetryLoad,
     /// Cria o primeiro projeto ou tarefa a partir do estado vazio.

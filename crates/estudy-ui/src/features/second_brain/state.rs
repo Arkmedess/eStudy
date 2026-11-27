@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use estudy_domain::{EntityId, KnowledgeNote, NoteKind};
+use iced::widget::text_editor;
 use std::collections::BTreeSet;
 
 /// Aba ativa do painel lateral de edição/leitura de nota.
@@ -14,7 +15,7 @@ pub enum BrainEditorTab {
 }
 
 /// Mensagens da fatia Segundo Cérebro.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum SecondBrainMessage {
     /// Filtra por tipo de artefato (`None` = Tudo).
     SetKindFilter(Option<NoteKind>),
@@ -22,16 +23,20 @@ pub enum SecondBrainMessage {
     ToggleTagFilter(Option<String>),
     /// Atualiza o termo de busca instantânea.
     SearchChanged(String),
-    /// Seleciona uma nota para abrir no painel de leitura/edição à direita.
+    /// Seleciona uma nota e abre o modal amplo de leitura/edição.
     SelectNote(EntityId),
-    /// Cria uma nova nota em branco e já a abre para edição.
+    /// Cria uma nova nota em branco e já a abre no modal multi-linha.
     CreateNote,
-    /// Alterna aba `Escrever | Visualizar` no painel lateral.
+    /// Fecha o modal de leitura/edição de nota.
+    CloseNoteModal,
+    /// Alterna aba `Escrever | Visualizar` no modal.
     SetEditorTab(BrainEditorTab),
     /// Atualiza o título da nota selecionada.
     TitleChanged(String),
-    /// Atualiza o corpo Markdown da nota selecionada.
+    /// Atualiza o corpo Markdown da nota selecionada por string direta.
     BodyChanged(String),
+    /// Processa ação multi-linha (`Enter`, digitação, seleção, colar) no `text_editor` da nota.
+    BodyEditorAction(text_editor::Action),
     /// Altera o tipo (`Nota / Ideia / Referência / Link`) da nota selecionada.
     KindChanged(NoteKind),
     /// Alterna fixação no topo da grade.
@@ -45,7 +50,7 @@ pub enum SecondBrainMessage {
 }
 
 /// Estado completo do Segundo Cérebro.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SecondBrainState {
     /// Notas armazenadas.
     pub notes: Vec<KnowledgeNote>,
@@ -55,14 +60,36 @@ pub struct SecondBrainState {
     pub tag_filter: Option<String>,
     /// Texto de busca instantânea.
     pub search_query: String,
-    /// Nota atualmente aberta no painel de edição à direita.
+    /// Nota atualmente selecionada.
     pub selected_note_id: Option<EntityId>,
-    /// Aba ativa do editor lateral.
+    /// Indica se o modal amplo de leitura/edição está aberto.
+    pub note_modal_open: bool,
+    /// Buffer multi-linha real (`text_editor::Content`) sincronizado com a nota aberta.
+    pub body_editor: text_editor::Content,
+    /// Aba ativa do editor.
     pub editor_tab: BrainEditorTab,
     /// Campo temporário de nova tag.
     pub new_tag_input: String,
     dirty_note_ids: BTreeSet<EntityId>,
     deleted_note_ids: BTreeSet<EntityId>,
+}
+
+impl Clone for SecondBrainState {
+    fn clone(&self) -> Self {
+        Self {
+            notes: self.notes.clone(),
+            kind_filter: self.kind_filter,
+            tag_filter: self.tag_filter.clone(),
+            search_query: self.search_query.clone(),
+            selected_note_id: self.selected_note_id.clone(),
+            note_modal_open: self.note_modal_open,
+            body_editor: text_editor::Content::with_text(&self.body_editor.text()),
+            editor_tab: self.editor_tab,
+            new_tag_input: self.new_tag_input.clone(),
+            dirty_note_ids: self.dirty_note_ids.clone(),
+            deleted_note_ids: self.deleted_note_ids.clone(),
+        }
+    }
 }
 
 impl SecondBrainState {
@@ -117,12 +144,17 @@ impl SecondBrainState {
             },
         ];
 
+        let body_editor =
+            text_editor::Content::with_text(notes.first().map_or("", |n| n.body_md.as_str()));
+
         Self {
             notes,
             kind_filter: None,
             tag_filter: None,
             search_query: String::new(),
             selected_note_id: Some(first_id),
+            note_modal_open: false,
+            body_editor,
             editor_tab: BrainEditorTab::Preview,
             new_tag_input: String::new(),
             dirty_note_ids: BTreeSet::new(),
@@ -183,57 +215,32 @@ impl SecondBrainState {
             SecondBrainMessage::ToggleTagFilter(tag) => self.tag_filter = tag,
             SecondBrainMessage::SearchChanged(query) => self.search_query = query,
             SecondBrainMessage::SelectNote(id) => {
+                if let Some(note) = self.notes.iter().find(|n| n.id == id) {
+                    self.body_editor = text_editor::Content::with_text(&note.body_md);
+                }
                 self.selected_note_id = Some(id);
+                self.note_modal_open = true;
                 self.new_tag_input.clear();
             }
-            SecondBrainMessage::CreateNote => {
-                let id = EntityId::new_v7();
-                let kind = self.kind_filter.unwrap_or(NoteKind::Note);
-                self.notes.insert(
-                    0,
-                    KnowledgeNote {
-                        id: id.clone(),
-                        title: "Nova nota".to_string(),
-                        kind,
-                        body_md: String::new(),
-                        source_url: None,
-                        tags: Vec::new(),
-                        pinned: false,
-                        created_at: now_utc,
-                        updated_at: now_utc,
-                    },
-                );
-                self.dirty_note_ids.insert(id.clone());
-                self.selected_note_id = Some(id);
-                self.editor_tab = BrainEditorTab::Write;
+            SecondBrainMessage::CreateNote => self.create_new_note(now_utc),
+            SecondBrainMessage::CloseNoteModal => {
+                self.note_modal_open = false;
+            }
+            SecondBrainMessage::BodyEditorAction(action) => {
+                self.body_editor.perform(action);
+                let updated = self.body_editor.text().trim_end_matches('\n').to_string();
+                self.mutate_selected_note(now_utc, |note| note.body_md = updated);
             }
             SecondBrainMessage::SetEditorTab(tab) => self.editor_tab = tab,
             SecondBrainMessage::TitleChanged(title) => {
-                if let Some(id) = self.selected_note_id.clone()
-                    && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
-                {
-                    note.title = title;
-                    note.updated_at = now_utc;
-                    self.dirty_note_ids.insert(id);
-                }
+                self.mutate_selected_note(now_utc, |note| note.title = title);
             }
             SecondBrainMessage::BodyChanged(body) => {
-                if let Some(id) = self.selected_note_id.clone()
-                    && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
-                {
-                    note.body_md = body;
-                    note.updated_at = now_utc;
-                    self.dirty_note_ids.insert(id);
-                }
+                self.body_editor = text_editor::Content::with_text(&body);
+                self.mutate_selected_note(now_utc, |note| note.body_md = body);
             }
             SecondBrainMessage::KindChanged(kind) => {
-                if let Some(id) = self.selected_note_id.clone()
-                    && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
-                {
-                    note.kind = kind;
-                    note.updated_at = now_utc;
-                    self.dirty_note_ids.insert(id);
-                }
+                self.mutate_selected_note(now_utc, |note| note.kind = kind);
             }
             SecondBrainMessage::TogglePin(id) => {
                 if let Some(note) = self.notes.iter_mut().find(|n| n.id == id) {
@@ -243,25 +250,7 @@ impl SecondBrainState {
                 }
             }
             SecondBrainMessage::NewTagInputChanged(val) => self.new_tag_input = val,
-            SecondBrainMessage::AddTag => {
-                let clean = self
-                    .new_tag_input
-                    .trim()
-                    .trim_start_matches('#')
-                    .to_string();
-                if clean.is_empty() {
-                    return;
-                }
-                if let Some(id) = self.selected_note_id.clone()
-                    && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
-                    && !note.tags.iter().any(|t| t.eq_ignore_ascii_case(&clean))
-                {
-                    note.tags.push(clean);
-                    note.updated_at = now_utc;
-                    self.dirty_note_ids.insert(id);
-                }
-                self.new_tag_input.clear();
-            }
+            SecondBrainMessage::AddTag => self.add_tag_to_selected(now_utc),
             SecondBrainMessage::DeleteNote(id) => {
                 self.notes.retain(|n| n.id != id);
                 self.dirty_note_ids.remove(&id);
@@ -271,5 +260,63 @@ impl SecondBrainState {
                 }
             }
         }
+    }
+
+    fn create_new_note(&mut self, now_utc: DateTime<Utc>) {
+        let id = EntityId::new_v7();
+        let kind = self.kind_filter.unwrap_or(NoteKind::Note);
+        self.notes.insert(
+            0,
+            KnowledgeNote {
+                id: id.clone(),
+                title: "Nova nota".to_string(),
+                kind,
+                body_md: String::new(),
+                source_url: None,
+                tags: Vec::new(),
+                pinned: false,
+                created_at: now_utc,
+                updated_at: now_utc,
+            },
+        );
+        self.dirty_note_ids.insert(id.clone());
+        self.selected_note_id = Some(id);
+        self.body_editor = text_editor::Content::new();
+        self.note_modal_open = true;
+        self.editor_tab = BrainEditorTab::Write;
+    }
+
+    fn mutate_selected_note(
+        &mut self,
+        now_utc: DateTime<Utc>,
+        apply: impl FnOnce(&mut KnowledgeNote),
+    ) {
+        if let Some(id) = self.selected_note_id.clone()
+            && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
+        {
+            apply(note);
+            note.updated_at = now_utc;
+            self.dirty_note_ids.insert(id);
+        }
+    }
+
+    fn add_tag_to_selected(&mut self, now_utc: DateTime<Utc>) {
+        let clean = self
+            .new_tag_input
+            .trim()
+            .trim_start_matches('#')
+            .to_string();
+        if clean.is_empty() {
+            return;
+        }
+        if let Some(id) = self.selected_note_id.clone()
+            && let Some(note) = self.notes.iter_mut().find(|n| n.id == id)
+            && !note.tags.iter().any(|t| t.eq_ignore_ascii_case(&clean))
+        {
+            note.tags.push(clean);
+            note.updated_at = now_utc;
+            self.dirty_note_ids.insert(id);
+        }
+        self.new_tag_input.clear();
     }
 }

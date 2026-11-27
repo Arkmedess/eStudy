@@ -19,7 +19,8 @@ pub use features::home::{
     ProjectCardSummary, TodayItem,
 };
 pub use features::projects::{
-    CONTEXT_SIDEBAR_WIDTH, DescriptionTab, ProjectsMessage, ProjectsState, TaskDrawerState,
+    CONTEXT_SIDEBAR_WIDTH, ContextSubmenu, DescriptionTab, DragTarget, ProjectsMessage,
+    ProjectsState, TaskContextMenu, TaskDrawerState, TaskModalMode, TaskModalState, TasksViewMode,
     UpcomingEventItem,
 };
 pub use features::second_brain::{BrainEditorTab, SecondBrainMessage, SecondBrainState};

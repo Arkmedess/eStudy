@@ -1,53 +1,59 @@
 # Design System — eStudy
 
-Documento oficial de interface, tokens visuais, tipografia, geometria e acessibilidade do **eStudy** (`Iced` + `wgpu`).
+Documento oficial de interface, tokens visuais, tipografia estática, iconografia ilustrada e acessibilidade do **eStudy** (`Iced 0.14` + `wgpu` sRGB padrão).
 
 ---
 
-## 1. Direção Visual e Navegação
+## 1. Arquitetura Visual, Janela Limpa e Interatividade Direta
 
-O eStudy combina a calma tátil de uma estação pessoal de estudos com hierarquia editorial clara, acesso rápido por teclado (`Ctrl+K`) e organização por módulos sem poluição visual.
+O eStudy segue uma estética editorial acolhedora e tátil: zero barras globais poluídas, zero segundas sidebars roubando largura útil e manipulação direta nos cartões antes de abrir qualquer janela modal.
 
-- **Barra lateral comprimível e expansível (`220px` $\leftrightarrow$ `64px`, `Ctrl+B`):** botão de comprimir/expandir fixado sempre no canto superior esquerdo (`x = 13px`, `38×36px`) e ícones dentro de slots fixos (`38×36px`) para não deslocarem ao alternar; exibe grupos (*Seu Espaço*, *Aprofundamento*, *Companhia*), badges vivos (*tarefas abertas*, *hábitos `X/Y`*, *notas*) e **cartão do Mascote** no modo expandido.
-- **Barra superior limpa (`44px`):** breadcrumb da rota ativa (`eStudy / Início`), busca rápida (`Ctrl+K`), botão **Espiar Hábitos** (`Eye`) e **Espiar Pomodoro** (`Timer`) abrindo popups leves sobre a tela ativa, notificações, seletor rápido de preset e alternador Claro/Escuro.
-- **Popups de visualização rápida (`QuickPopup` via `modal_surface`):** clicar em uma nota recente na Home ou nos botões de espiar da barra superior abre uma visualização focada (*Nota*, *Hábitos de Hoje* ou *Pomodoro*) sem tirar o usuário da tela atual, fechando com `Esc`.
-- **Home em Painel Bento Editorial:**
-  - *Cabeçalho editorial:* saudação em serifa (`Lora`), resumo vivo do dia e pílulas de salto rápido (*Timeline Hoje, Hábitos, Segundo Cérebro, Semana*).
-  - *Faixa Bento Hero assimétrica (`5fr / 7fr`):* cartão tonal de **Pulso de Foco (14 dias)** com gráfico de linha/área `SparklineCanvas` e cartão de **Ritmo anual (365 dias)** com `HeatmapGrid` e legenda `Menos ■■■■■ Mais`.
-  - *Grade principal (`8fr / 4fr`):* à esquerda, grade de **Projetos** com `category_tile` colorido por categoria e contadores com bolinhas por status + cartão **Hoje**; à direita, **Perfil + medalhas**, **Em foco (`X/5`)** com disparo direto de Pomodoro, **Diário de Humor** (7 dias / ano) e **Quadro Personalizável** com 7 molduras (*Polaroid, Photocard, Clean, Moderna, Japandi, Museu, Nenhum*).
-- **Gavetas flutuantes à direita (`20px` de raio, margem externa `16px`):** abrir uma tarefa ou clicar em "Timeline Hoje" exibe um painel flutuante arredondado (incluindo faixa semanal, blocos sem horário tintados, timeline vertical em cápsulas proporcionais, janelas livres e régua vermelha `Agora · HH:MM`).
-- **Modo Foco em tela cheia (`Esc` sai):** oculta menus e colunas, deixando apenas o anel do Pomodoro, o Pet estudando junto e os controles mínimos de áudio.
+- **Sem Topbar global e sem 2ª sidebar:** o palco principal ocupa 100% da altura da janela com respiro amplo.
+- **Sidebar esquerda limpa (`216px` expandida $\leftrightarrow$ `58px` em trilho de ícones, `Ctrl+B`):**
+  - *Modo expandido (`216px`):* marca nominal **`e`***`Study`* (`Newsreader Italic` + `Newsreader Medium`), gatilho discreto de busca (`Buscar... Ctrl+K`), seção `SEU ESPAÇO` com as 5 rotas ativas (*Início, Tarefas, Hábitos, Segundo cérebro, Agenda*), contadores discretos, medalhão ilustrado do gatinho **Mochi** com fala contextual e `Ajustes`.
+  - *Modo recolhido (`58px`):* apenas os ícones ilustrados coloridos (`22px`, sem micro-textos espremidos), medalhão do **Mochi** (clique abre balão flutuante ao lado) e `Ajustes`.
+- **Pílula flutuante de Pomodoro (sob demanda):** aparece no canto superior direito somente quando o cronômetro de foco está ativo (`● MM:SS · Tarefa [Pausar] [Expandir]`).
+- **Cabeçalho editorial unificado (`editorial_page_header`):** micro-breadcrumb (`ESTUDY / TAREFAS`) acima da linha dupla na mesma base — título em `Newsreader` (`34px`) ao lado do subtítulo em **`Newsreader Italic` real** (`18px`) — e no máximo **1 botão calmo de ação** alinhado à direita (`+ Nova tarefa`, `+ Novo compromisso`).
+- **Home (`Início`) em 3 faixas:**
+  1. *Hero acolhedor:* saudação em `Newsreader` (`38px`), resumo vivo do dia, paisagem vetorial sutil à direita e 4 pílulas rápidas (`+ Tarefa`, `+ Hábito`, `+ Compromisso`, `+ Nota`).
+  2. *Faixa de contraste tonal (`4fr / 5fr / 3fr`):* Card Terracota Quente (*Foco & Ritmo* com disparo rápido de 25m), Card Musgo Escuro (*Constância · 14 dias* com `SparklineCanvas` e métricas) e *Mini-Calendário* interativo do mês.
+  3. *Faixa acionável em 3 colunas:* *Tarefas* (check circular direto na Home), *Hábitos* (check colorido direto) e *Segundo cérebro*.
+- **Tarefas (`[ Semana | Calendário | Kanban ]`):**
+  - Abre direto na visão **`Semana`**, com bandeja horizontal **`SEM DIA`** no topo e colunas diárias divididas nos 4 períodos (`Qualquer hora`, `Manhã`, `Tarde`, `Noite`).
+  - **Manipulação direta no cartão:** rádio circular `○ -> ✓` em 1 clique, pílula de status clicável (`Falta fazer -> Fazendo -> Concluído`), **Drag & Drop fluido** entre `SEM DIA`, dias e períodos, e **Menu de Contexto flutuante no cursor (clique direito)** (*Editar, Duplicar, Concluir, Iniciar foco, Status ▸, Prioridade ▸, Período ▸, Dia ▸, Excluir*).
+  - **Apenas 2 modais previsíveis:** Modal central **`Nova / Editar tarefa`** (com `text_editor` multi-linha real onde `Enter` pula linha, checklist interativa, status, prioridade, toggle *Tem dia*, atalhos *Hoje / Amanhã / +1 semana*, período e projeto) e **Card do Dia** ao clicar numa data do modo Calendário.
+- **Segundo Cérebro & Hábitos:** grade ampla de 4 colunas no Segundo Cérebro tendo o **1º cartão `+ Nova nota`** e leitura/edição multi-linha real (`text_editor`) em modal amplo; matriz semanal em Hábitos com `+ Novo hábito` integrado no rodapé do cartão.
 
 ---
 
-## 2. Tipografia, Geometria, Cores de Categoria e Mídia Leve
+## 2. Tipografia Estática (`Shaping::Advanced`), Iconografia em 2 Camadas e Geometria
 
-- **Fontes embutidas no binário (`crates/estudy-ui-kit/assets/fonts/`):**
-  - `Plus Jakarta Sans` (variável OFL) — família padrão de interface, controles e listas.
-  - `Lora` (variável OFL) — família editorial serifada para saudações, títulos de página e citações.
-  - `JetBrains Mono` (variável OFL) — temporizadores, horários, contadores e badges numéricos sem tremulação.
-- **Paleta semântica de 7 categorias (`CategoryColor`):** `Sage`, `Terracotta`, `Slate`, `Ochre`, `Lavender`, `Moss` e `Coral` — cada uma calibrada para modo Claro e Escuro com variantes `.solid(theme)`, `.tint(theme)` e `.border(theme)` para projetos, tags, hábitos, notas e agenda.
-- **Espaçamento e raios:** grade base de `4px` (`SPACE_1` a `SPACE_8`) e raios concêntricos suaves (`20px` para gavetas flutuantes, `16px` para cartões principais e modais, `12px` para painéis internos, `10px` para controles e entradas de texto, `6px` para chips de atalho e `999px` para pílulas/filtros).
-- **Primitivos do UI Kit (`crates/estudy-ui-kit`):** `editorial_heading`, `category_tile`, `category_pill`, `floating_drawer`, `SparklineCanvas`, `HeatmapGrid`, `card`, `tonal_card`, `soft_surface`, `hairline_divider`, `segmented_switch`, `pill_chip`, `progress_track`, `metric_stat`, `empty_placeholder`, `banner_toast`, `kbd_hint`, `drawer_backdrop` e `modal_surface`.
-- **Iconografia:** catálogo único com 87 ícones Lucide em SVG vetorial (zero emojis na interface).
-- **Sprites 2D do Jardim e Pets:** arquivos WebP artesanais (`128×128px`, 2 a 4 frames leves por estado), carregados sob demanda apenas para o que está visível na tela (teto de 1,5 MB de RAM) e animados a 4–6 FPS somente quando a janela está ativa.
-- **Ícones de Conquistas:** arquivos WebP `64×64px` em 4 raridades (*Bronze, Prata, Ouro, Platina*).
+- **Motor gráfico padrão (`wgpu`):** `estudy-desktop` e `estudy-preview` ativam `wgpu` por padrão para blending linear `sRGB` nítido nas fontes, sombras suaves e 60–144 FPS no Drag & Drop, mantendo a memória privada do processo (`RssAnon`) abaixo de `45 MiB` (e modo CPU opcional via `--no-default-features --features cpu`).
+- **9 fontes TrueType estáticas OFL embutidas (`crates/estudy-ui-kit/assets/fonts/`, zero eixo variável `fvar`):**
+  - `Newsreader 16pt` (`Regular`, `Medium`, **`Italic` real**) — títulos editoriais, subtítulos em itálico na mesma base e métricas principais.
+  - `DM Sans` (`Regular`, `Medium`, `SemiBold`, `Bold`) — interface limpa, cartões, filtros e textos de apoio.
+  - `JetBrains Mono` (`Regular`, `Medium`) — cronômetros, datas e contadores tabulares.
+  - Todos os helpers (`shaped_text`, `editorial_page_header`, `editorial_heading`) forçam `text::Shaping::Advanced` (HarfRust) para garantir kerning `GPOS` completo também em strings ASCII.
+- **Iconografia em duas camadas (`crates/estudy-ui-kit/src/icons.rs`):**
+  - **`IllustratedIcon` (17 SVGs multi-cor com cache estático):** ícones ilustrados com preenchimento e luz próprios (sem o filtro monocromático do `svg::Style.color`) para módulos da sidebar, períodos do dia (*Qualquer hora, Manhã, Tarde, Noite*), prioridades e medalhão do gatinho **Mochi**.
+  - **`Icon` (87 SVGs monoline `1.75px`):** traços limpos renderizados em tamanhos inteiros (`16px / 20px / 24px`) para ações internas de botões.
+- **Bordas hairline delicadas e sombras suaves:** `border_subtle` calibrada em `10%–11%` de opacidade e elevação orgânica suave nos cartões, modais e menus flutuantes.
 
 ---
 
 ## 3. Os 5 Presets de Tema (10 Variações Verificadas em WCAG 2.2 AA)
 
-Todos os presets passam por verificação automática de contraste mínimo `4.5:1` entre `accent` e `panel`/`card` antes de cada release.
+As cores centrais do **Oliva Orgânico** (e dos demais 4 presets) são preservadas integralmente e validadas por testes automáticos de contraste mínimo `4.5:1` antes de cada release.
 
 | Preset | Modo | `accent` | `on_accent` | `bg` | `panel` | `card` | Contraste `accent/panel` |
 | :--- | :---: | :--- | :--- | :--- | :--- | :--- | :---: |
-| **1. Oliva Orgânico** *(Padrão)* | Light | `#4a5d4e` | `#ffffff` | `#f7f5f0` | `#efece4` | `#ffffff` | `6.00:1` |
-| **1. Oliva Orgânico** | Dark | `#a3b899` | `#121411` | `#121411` | `#1a1d18` | `#21251f` | `8.01:1` |
-| **2. eStudy Menta** | Dark | `#86efac` | `#070709` | `#070709` | `#0f1015` | `#13141a` | `13.53:1` |
-| **2. eStudy Menta** | Light | `#15803d` | `#ffffff` | `#f8fafc` | `#f1f5f9` | `#ffffff` | `4.58:1` |
-| **3. Cyber Minimalist** | Dark | `#38bdf8` | `#040711` | `#040711` | `#0a1020` | `#0f172a` | `8.85:1` |
-| **3. Cyber Minimalist** | Light | `#0369a1` | `#ffffff` | `#f0f7ff` | `#e0f0fe` | `#ffffff` | `5.10:1` |
-| **4. Solar Amber** | Dark | `#fbbf24` | `#0e0b08` | `#0e0b08` | `#17130e` | `#1f1a13` | `11.07:1` |
-| **4. Solar Amber** | Light | `#92400e` | `#ffffff` | `#fef9ee` | `#fef3c7` | `#ffffff` | `6.37:1` |
-| **5. Velvet Sakura** | Dark | `#f472b6` | `#0d080b` | `#0d080b` | `#160e13` | `#1d1319` | `7.17:1` |
-| **5. Velvet Sakura** | Light | `#be185d` | `#ffffff` | `#faf7f5` | `#fce7f3` | `#ffffff` | `5.14:1` |
+| **1. Oliva Orgânico** *(Padrão)* | Light | `#374c3b` | `#ffffff` | `#f6f3ec` | `#e8e3d8` | `#ffffff` | `7.26:1` |
+| **1. Oliva Orgânico** | Dark | `#b2c9a8` | `#10120f` | `#10120f` | `#161915` | `#222720` | `9.98:1` |
+| **2. eStudy Menta** | Dark | `#86efac` | `#07080a` | `#07080a` | `#0e1016` | `#181b24` | `13.54:1` |
+| **2. eStudy Menta** | Light | `#0f612e` | `#ffffff` | `#f4f7fa` | `#e8eff6` | `#ffffff` | `6.54:1` |
+| **3. Cyber Minimalist** | Dark | `#4cc9ff` | `#040711` | `#050814` | `#0b1224` | `#141e36` | `9.86:1` |
+| **3. Cyber Minimalist** | Light | `#025e91` | `#ffffff` | `#eff6ff` | `#dfedfc` | `#ffffff` | `5.86:1` |
+| **4. Solar Amber** | Dark | `#fcc738` | `#0e0b08` | `#0e0b08` | `#17120d` | `#241d15` | `11.84:1` |
+| **4. Solar Amber** | Light | `#84380a` | `#ffffff` | `#fef8ec` | `#f9edd1` | `#ffffff` | `7.08:1` |
+| **5. Velvet Sakura** | Dark | `#f786c0` | `#0d080b` | `#0d080b` | `#160e13` | `#23171e` | `8.25:1` |
+| **5. Velvet Sakura** | Light | `#aa1452` | `#ffffff` | `#faf5f7` | `#f7e2ee` | `#ffffff` | `5.82:1` |

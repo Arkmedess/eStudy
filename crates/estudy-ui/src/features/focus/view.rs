@@ -7,7 +7,10 @@ use estudy_ui_kit::widgets::{
     banner_toast, card, hairline_divider, icon_svg, kbd_hint, pill_chip, section_header,
     segmented_switch, soft_surface, status_badge,
 };
-use estudy_ui_kit::{EstudyTheme, Icon, SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_6};
+use estudy_ui_kit::{
+    EstudyTheme, FONT_SIZE_BASE, FONT_SIZE_HERO_TIMER, FONT_SIZE_MD, Icon, SPACE_1, SPACE_2,
+    SPACE_3, SPACE_4, SPACE_6,
+};
 use iced::widget::canvas::{self, Geometry, Path, Stroke};
 use iced::widget::{
     button, canvas as iced_canvas, column, container, row, slider, text, text_input,
@@ -88,8 +91,10 @@ fn view_focus_header<'a, Message: Clone + 'a>(
 
     let exit_btn = button(
         row![
-            icon_svg(Icon::X, 14.0, theme.text_muted),
-            text("Sair do foco").size(12).color(theme.text_primary),
+            icon_svg(Icon::X, 15.0, theme.text_muted),
+            text("Sair do foco")
+                .size(FONT_SIZE_BASE)
+                .color(theme.text_primary),
             kbd_hint("Esc", theme),
         ]
         .spacing(SPACE_2)
@@ -103,12 +108,12 @@ fn view_focus_header<'a, Message: Clone + 'a>(
         column![
             section_header(Icon::Timer, target_title, theme),
             row![
-                icon_svg(Icon::PawPrint, 13.0, theme.accent),
+                icon_svg(Icon::PawPrint, 14.0, theme.accent),
                 text(format!(
                     "{pet_label} · {} min focados hoje",
                     state.today_focused_minutes
                 ))
-                .size(12)
+                .size(FONT_SIZE_BASE)
                 .color(theme.text_muted),
             ]
             .spacing(SPACE_1)
@@ -145,13 +150,13 @@ fn view_timer_ring<'a, Message: 'a>(
         is_break: state.timer.phase == FocusPhase::ShortBreak,
         theme,
     })
-    .width(Length::Fixed(240.0))
-    .height(Length::Fixed(240.0));
+    .width(Length::Fixed(268.0))
+    .height(Length::Fixed(268.0));
 
     let overlay_clock = container(
         column![
             text(format!("{minutes:02}:{seconds:02}"))
-                .size(44)
+                .size(FONT_SIZE_HERO_TIMER)
                 .color(theme.text_primary),
             status_badge(
                 phase_label,
@@ -166,14 +171,14 @@ fn view_timer_ring<'a, Message: 'a>(
         .spacing(SPACE_2)
         .align_x(Alignment::Center),
     )
-    .width(Length::Fixed(240.0))
-    .height(Length::Fixed(240.0))
-    .center_x(Length::Fixed(240.0))
-    .center_y(Length::Fixed(240.0));
+    .width(Length::Fixed(268.0))
+    .height(Length::Fixed(268.0))
+    .center_x(Length::Fixed(268.0))
+    .center_y(Length::Fixed(268.0));
 
     iced::widget::stack![ring_canvas, overlay_clock]
-        .width(Length::Fixed(240.0))
-        .height(Length::Fixed(240.0))
+        .width(Length::Fixed(268.0))
+        .height(Length::Fixed(268.0))
         .into()
 }
 
@@ -300,13 +305,13 @@ fn view_dsp_dock<'a, Message: Clone + 'a>(
     .width(Length::Fixed(160.0));
 
     let volume_bar = row![
-        button(icon_svg(mute_icon, 15.0, theme.accent))
+        button(icon_svg(mute_icon, 16.0, theme.accent))
             .on_press(mute_msg)
             .padding(SPACE_1)
             .style(move |_, status| theme.subtle_button_style(status)),
         vol_slider,
         text(format!("{}%", state.volume_percent))
-            .size(12)
+            .size(FONT_SIZE_BASE)
             .color(theme.text_muted),
         container(status_badge("-16 LUFS DSP", theme.accent, theme))
             .align_x(Alignment::End)
@@ -355,7 +360,7 @@ fn view_post_session_capture<'a, Message: Clone + 'a>(
         move |val| map_msg(FocusMessage::CaptureNoteChanged(val))
     })
     .padding(SPACE_2)
-    .size(13)
+    .size(FONT_SIZE_MD)
     .style(move |_, status| theme.soft_input_style(status));
 
     let q_total = text_input("Questões", &state.capture.questions_total_input)
@@ -363,9 +368,9 @@ fn view_post_session_capture<'a, Message: Clone + 'a>(
             let map_msg = map_msg.clone();
             move |val| map_msg(FocusMessage::QuestionsTotalChanged(val))
         })
-        .width(Length::Fixed(96.0))
+        .width(Length::Fixed(112.0))
         .padding(SPACE_2)
-        .size(12)
+        .size(FONT_SIZE_BASE)
         .style(move |_, status| theme.soft_input_style(status));
 
     let q_right = text_input("Acertos", &state.capture.questions_right_input)
@@ -373,9 +378,9 @@ fn view_post_session_capture<'a, Message: Clone + 'a>(
             let map_msg = map_msg.clone();
             move |val| map_msg(FocusMessage::QuestionsRightChanged(val))
         })
-        .width(Length::Fixed(96.0))
+        .width(Length::Fixed(112.0))
         .padding(SPACE_2)
-        .size(12)
+        .size(FONT_SIZE_BASE)
         .style(move |_, status| theme.soft_input_style(status));
 
     let mut body = column![
@@ -385,9 +390,13 @@ fn view_post_session_capture<'a, Message: Clone + 'a>(
         note_input,
         soft_surface(
             row![
-                text("Questões:").size(12).color(theme.text_muted),
+                text("Questões:")
+                    .size(FONT_SIZE_BASE)
+                    .color(theme.text_muted),
                 q_total,
-                text("Acertos:").size(12).color(theme.text_muted),
+                text("Acertos:")
+                    .size(FONT_SIZE_BASE)
+                    .color(theme.text_muted),
                 q_right,
             ]
             .spacing(SPACE_2)

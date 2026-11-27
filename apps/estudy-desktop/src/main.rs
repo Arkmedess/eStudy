@@ -231,12 +231,14 @@ impl DesktopShell {
         };
 
         let (dirty_projects, dirty_tasks) = self.app.projects_state.take_dirty();
+        let deleted_tasks = self.app.projects_state.take_deleted_tasks();
         let dirty_events = self.app.calendar_state.take_dirty_events();
         let (dirty_habits, deleted_habits) = self.app.habits_state.take_dirty();
         let (dirty_notes, deleted_notes) = self.app.second_brain_state.take_dirty();
         let pending_focus = self.app.focus_state.take_pending_sessions();
         if dirty_projects.is_empty()
             && dirty_tasks.is_empty()
+            && deleted_tasks.is_empty()
             && dirty_events.is_empty()
             && dirty_habits.is_empty()
             && deleted_habits.is_empty()
@@ -280,6 +282,13 @@ impl DesktopShell {
                 .find(|item| item.id == *task_id)
                 && SqliteProjectRepository::save_task(conn, task, None).is_ok()
             {
+                persisted += 1;
+            }
+        }
+
+        let now_del = Utc::now();
+        for task_id in &deleted_tasks {
+            if SqliteProjectRepository::soft_delete_task(conn, task_id, now_del).is_ok() {
                 persisted += 1;
             }
         }

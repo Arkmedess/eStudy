@@ -738,7 +738,7 @@ impl Icon {
         let hex = color_to_hex(color);
         let geometry = self.spec().geometry;
         format!(
-            r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{hex}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{geometry}</svg>"#
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{hex}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">{geometry}</svg>"#
         )
     }
 
@@ -757,6 +757,221 @@ impl Icon {
             .iter()
             .find(|spec| spec.icon == self)
             .unwrap_or(&ICON_SPECS[0])
+    }
+}
+
+/// Ícones vetoriais ilustrados multi-cor (sem filtro monocromático) para módulos, turnos, prioridades e mascote.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IllustratedIcon {
+    /// Casinha acolhedora (Início).
+    Home,
+    /// Prancheta/caderno de tarefas (Tarefas).
+    Tasks,
+    /// Chama viva orgânica (Hábitos).
+    Habits,
+    /// Caderno de ideias e lâmpada quente (Segundo Cérebro).
+    SecondBrain,
+    /// Folha de calendário com topo colorido (Agenda).
+    Calendar,
+    /// Chapéu/livro de estudos (Estudos).
+    Studies,
+    /// Pilha de livros artesanal (Estante).
+    Bookshelf,
+    /// Engrenagem em latão/oliva (Ajustes).
+    Settings,
+    /// Relógio suave (Período: Qualquer hora).
+    TurnAnytime,
+    /// Sol dourado matinal (Período: Manhã).
+    TurnMorning,
+    /// Sol quente vespertino (Período: Tarde).
+    TurnAfternoon,
+    /// Lua crescente serena (Período: Noite).
+    TurnEvening,
+    /// Semente/broto discreto (Prioridade Baixa).
+    PriorityLow,
+    /// Folha equilibrada (Prioridade Média).
+    PriorityMedium,
+    /// Pinha/chama terracota (Prioridade Alta).
+    PriorityHigh,
+    /// Alerta coral intenso (Prioridade Urgente).
+    PriorityUrgent,
+    /// Medalhão ilustrado do gatinho tricolor Mochi.
+    MascotMochi,
+}
+
+static CACHED_ILLUSTRATED_HANDLES: LazyLock<Vec<svg::Handle>> = LazyLock::new(|| {
+    IllustratedIcon::ALL
+        .iter()
+        .map(|icon| svg::Handle::from_memory(icon.to_svg_string().into_bytes()))
+        .collect()
+});
+
+struct IllustratedSpec {
+    icon: IllustratedIcon,
+    name: &'static str,
+    view_box: &'static str,
+    body: &'static str,
+}
+
+const ILLUSTRATED_SPECS: &[IllustratedSpec] = &[
+    IllustratedSpec {
+        icon: IllustratedIcon::Home,
+        name: "illus-home",
+        view_box: "0 0 24 24",
+        body: r##"<path d="M4.5 10.5L12 4l7.5 6.5V19a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19v-8.5Z" fill="#FAF4E8" stroke="#2B241E" stroke-width="1.5" stroke-linejoin="round"/><path d="M2.75 11.25L12 3.25l9.25 8-1.5 1.5L12 6.1 4.25 12.75l-1.5-1.5Z" fill="#C85A36" stroke="#2B241E" stroke-width="1.4" stroke-linejoin="round"/><rect x="9.75" y="13.5" width="4.5" height="7" rx="1" fill="#4E6B52" stroke="#2B241E" stroke-width="1.4"/><circle cx="12" cy="9.75" r="1.5" fill="#F2B84B" stroke="#2B241E" stroke-width="1.2"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::Tasks,
+        name: "illus-tasks",
+        view_box: "0 0 24 24",
+        body: r##"<rect x="4.5" y="4.5" width="15" height="16.5" rx="2.5" fill="#E3A865" stroke="#2B241E" stroke-width="1.5"/><rect x="6.5" y="6.5" width="11" height="12.5" rx="1.2" fill="#FCF9F2" stroke="#2B241E" stroke-width="1.2"/><rect x="9" y="3" width="6" height="3" rx="1.2" fill="#5D7560" stroke="#2B241E" stroke-width="1.3"/><path d="M8.5 10.5l1.3 1.3 2.4-2.4" fill="none" stroke="#374C3B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><line x1="13.5" y1="10.5" x2="15.8" y2="10.5" stroke="#8C7E70" stroke-width="1.5" stroke-linecap="round"/><circle cx="9.5" cy="15" r="1.1" fill="#C85A36"/><line x1="12.2" y1="15" x2="15.8" y2="15" stroke="#8C7E70" stroke-width="1.5" stroke-linecap="round"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::Habits,
+        name: "illus-habits",
+        view_box: "0 0 24 24",
+        body: r##"<path d="M12.3 2.8c1.9 3 5.7 5.7 5.7 10.6a6 6 0 1 1-12 0c0-3 1.8-5.7 3.8-7.6.1 1.7 1 2.7 2 2.8-.2-1.8-.1-3.9.5-5.8Z" fill="#D9623B" stroke="#2B241E" stroke-width="1.5" stroke-linejoin="round"/><path d="M12.2 10.2c1.2 1.6 2.8 3.1 2.8 5.2a3 3 0 0 1-6 0c0-1.6 1-3 2-4 .1.8.6 1.3 1.1 1.3 0-.8 0-1.7.1-2.5Z" fill="#F6C445" stroke="#2B241E" stroke-width="1.2" stroke-linejoin="round"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::SecondBrain,
+        name: "illus-second-brain",
+        view_box: "0 0 24 24",
+        body: r##"<path d="M9 17.5h6v2a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 19.5v-2Z" fill="#7D8C80" stroke="#2B241E" stroke-width="1.4"/><path d="M12 3.5a6.2 6.2 0 0 1 4.1 10.8c-.8.7-1.3 1.7-1.4 2.7H9.3c-.1-1-.6-2-1.4-2.7A6.2 6.2 0 0 1 12 3.5Z" fill="#F7CE5B" stroke="#2B241E" stroke-width="1.5" stroke-linejoin="round"/><circle cx="10.2" cy="8.3" r="1.4" fill="#FFF7D6"/><path d="M11 17v-3.5m2 3.5v-3.5" stroke="#2B241E" stroke-width="1.3" stroke-linecap="round"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::Calendar,
+        name: "illus-calendar",
+        view_box: "0 0 24 24",
+        body: r##"<rect x="3.5" y="4.5" width="17" height="16" rx="2.5" fill="#FCF9F2" stroke="#2B241E" stroke-width="1.5"/><path d="M3.5 7A2.5 2.5 0 0 1 6 4.5h12A2.5 2.5 0 0 1 20.5 7v2.5h-17V7Z" fill="#C85A36" stroke="#2B241E" stroke-width="1.5"/><line x1="8" y1="2.8" x2="8" y2="6" stroke="#2B241E" stroke-width="1.6" stroke-linecap="round"/><line x1="16" y1="2.8" x2="16" y2="6" stroke="#2B241E" stroke-width="1.6" stroke-linecap="round"/><circle cx="8.5" cy="13.5" r="1.3" fill="#4E6B52"/><circle cx="12" cy="13.5" r="1.3" fill="#E0A642"/><circle cx="15.5" cy="16.8" r="1.5" fill="#C85A36"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::Studies,
+        name: "illus-studies",
+        view_box: "0 0 24 24",
+        body: r##"<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H11a2 2 0 0 1 1 .3A2 2 0 0 1 13 4h5.5A2.5 2.5 0 0 1 21 6.5v12a1 1 0 0 1-1 1h-6a2 2 0 0 0-2 1 2 2 0 0 0-2-1H4a1 1 0 0 1-1-1v-12Z" fill="#FCF9F2" stroke="#2B241E" stroke-width="1.5" stroke-linejoin="round"/><line x1="12" y1="4.5" x2="12" y2="19.8" stroke="#2B241E" stroke-width="1.4"/><path d="M15.5 4v7.5l1.8-1.3 1.7 1.3V4h-3.5Z" fill="#C85A36" stroke="#2B241E" stroke-width="1.2" stroke-linejoin="round"/><line x1="6" y1="9" x2="9.5" y2="9" stroke="#4E6B52" stroke-width="1.5" stroke-linecap="round"/><line x1="6" y1="12.5" x2="9.5" y2="12.5" stroke="#8C7E70" stroke-width="1.5" stroke-linecap="round"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::Bookshelf,
+        name: "illus-bookshelf",
+        view_box: "0 0 24 24",
+        body: r##"<rect x="4" y="5" width="4.2" height="14.5" rx="1" fill="#4E6B52" stroke="#2B241E" stroke-width="1.4"/><rect x="8.8" y="6.5" width="4.2" height="13" rx="1" fill="#E0A642" stroke="#2B241E" stroke-width="1.4"/><path d="M14.2 6.2l3.9-1 2.4 13.4-3.9 1-2.4-13.4Z" fill="#C85A36" stroke="#2B241E" stroke-width="1.4" stroke-linejoin="round"/><line x1="2.8" y1="20" x2="21.2" y2="20" stroke="#2B241E" stroke-width="1.6" stroke-linecap="round"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::Settings,
+        name: "illus-settings",
+        view_box: "0 0 24 24",
+        body: r##"<circle cx="12" cy="12" r="7.5" fill="#E3DAC8" stroke="#2B241E" stroke-width="1.5"/><circle cx="12" cy="12" r="3.2" fill="#4E6B52" stroke="#2B241E" stroke-width="1.4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6" stroke="#2B241E" stroke-width="1.7" stroke-linecap="round"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::TurnAnytime,
+        name: "illus-turn-anytime",
+        view_box: "0 0 24 24",
+        body: r##"<circle cx="12" cy="12.5" r="8" fill="#DCE5DA" stroke="#374C3B" stroke-width="1.6"/><circle cx="12" cy="12.5" r="5.2" fill="#FAF7F0"/><path d="M12 8.8v3.9l2.6 1.6" fill="none" stroke="#374C3B" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><line x1="9.8" y1="2.8" x2="14.2" y2="2.8" stroke="#C85A36" stroke-width="1.8" stroke-linecap="round"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::TurnMorning,
+        name: "illus-turn-morning",
+        view_box: "0 0 24 24",
+        body: r##"<circle cx="12" cy="12" r="5" fill="#F6C445" stroke="#8C5811" stroke-width="1.5"/><circle cx="10.8" cy="10.8" r="1.6" fill="#FFF3C4"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6" stroke="#D98A2B" stroke-width="1.7" stroke-linecap="round"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::TurnAfternoon,
+        name: "illus-turn-afternoon",
+        view_box: "0 0 24 24",
+        body: r##"<circle cx="12" cy="12" r="5.2" fill="#DF6D3B" stroke="#7D2D14" stroke-width="1.5"/><circle cx="10.8" cy="10.8" r="1.8" fill="#F9B872"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12H5M19 12h2.2M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M18.5 5.5l-1.6 1.6M7.1 16.9l-1.6 1.6" stroke="#C85A36" stroke-width="1.7" stroke-linecap="round"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::TurnEvening,
+        name: "illus-turn-evening",
+        view_box: "0 0 24 24",
+        body: r##"<path d="M19.5 14.2A7.8 7.8 0 0 1 9.8 4.5a7.8 7.8 0 1 0 9.7 9.7Z" fill="#7D8CE0" stroke="#323B75" stroke-width="1.5" stroke-linejoin="round"/><circle cx="17.2" cy="6.5" r="1.4" fill="#F5C84C"/><circle cx="14.2" cy="9.5" r="0.9" fill="#E3E7FF"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::PriorityLow,
+        name: "illus-priority-low",
+        view_box: "0 0 24 24",
+        body: r##"<ellipse cx="12" cy="14" rx="5" ry="6" fill="#9BBAA0" stroke="#2F4734" stroke-width="1.5"/><path d="M8.5 11.5h7M8.5 15h7" stroke="#2F4734" stroke-width="1.2" stroke-linecap="round"/><path d="M12 4.5v3.5" stroke="#2F4734" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="8.5" r="2" fill="#587A5F"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::PriorityMedium,
+        name: "illus-priority-medium",
+        view_box: "0 0 24 24",
+        body: r##"<ellipse cx="12" cy="14" rx="5.3" ry="6.2" fill="#E8B349" stroke="#6E470B" stroke-width="1.5"/><path d="M8.2 11.5h7.6M8.2 15h7.6" stroke="#6E470B" stroke-width="1.2" stroke-linecap="round"/><path d="M12 4.2v3.6" stroke="#6E470B" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="8.2" r="2.1" fill="#B87D1E"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::PriorityHigh,
+        name: "illus-priority-high",
+        view_box: "0 0 24 24",
+        body: r##"<ellipse cx="12" cy="14.2" rx="5.5" ry="6.3" fill="#D8633B" stroke="#66220E" stroke-width="1.5"/><path d="M8 11.5h8M8 15h8M9.5 18.2h5" stroke="#66220E" stroke-width="1.25" stroke-linecap="round"/><path d="M12 3.8v3.8" stroke="#66220E" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="8" r="2.2" fill="#9E3919"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::PriorityUrgent,
+        name: "illus-priority-urgent",
+        view_box: "0 0 24 24",
+        body: r##"<path d="M12 3l8.2 15.2a1.4 1.4 0 0 1-1.2 2.1H5a1.4 1.4 0 0 1-1.2-2.1L12 3Z" fill="#E04F43" stroke="#5C1510" stroke-width="1.5" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="14" stroke="#FFF8F5" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="#FBE166"/>"##,
+    },
+    IllustratedSpec {
+        icon: IllustratedIcon::MascotMochi,
+        name: "illus-mascot-mochi",
+        view_box: "0 0 36 36",
+        body: r##"<circle cx="18" cy="18" r="16.5" fill="#EFE8DA" stroke="#2B241E" stroke-width="1.4"/><path d="M9.5 16L8 8.2l6.5 3.6c2.2-.6 4.8-.6 7 0L28 8.2 26.5 16c1.5 2.2 2 5 1.2 7.5-1.2 3.5-5.1 5.5-9.7 5.5s-8.5-2-9.7-5.5c-.8-2.5-.3-5.3 1.2-7.5Z" fill="#FCF9F3" stroke="#2B241E" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 8.2l6.2 3.5c-1.8 1.2-3.4 3-4.2 5.2L8 8.2Z" fill="#D9723E"/><path d="M28 8.2l-6.2 3.5c1.9 1.1 3.3 2.8 4.1 5L28 8.2Z" fill="#3B332C"/><circle cx="14.2" cy="18.8" r="1.35" fill="#241E1A"/><circle cx="21.8" cy="18.8" r="1.35" fill="#241E1A"/><ellipse cx="11.6" cy="21" rx="1.6" ry="0.95" fill="#F2A7A0"/><ellipse cx="24.4" cy="21" rx="1.6" ry="0.95" fill="#F2A7A0"/><path d="M16.5 21.3c.8.9 2.2.9 3 0" fill="none" stroke="#241E1A" stroke-width="1.3" stroke-linecap="round"/><path d="M11 26.8c2.2 1.5 11.8 1.5 14 0l-1.2 3.2c-3.4 1.2-8.2 1.2-11.6 0L11 26.8Z" fill="#4E6B52" stroke="#2B241E" stroke-width="1.2" stroke-linejoin="round"/>"##,
+    },
+];
+
+impl IllustratedIcon {
+    /// Lista completa dos 17 ícones ilustrados multi-cor.
+    pub const ALL: [Self; 17] = [
+        Self::Home,
+        Self::Tasks,
+        Self::Habits,
+        Self::SecondBrain,
+        Self::Calendar,
+        Self::Studies,
+        Self::Bookshelf,
+        Self::Settings,
+        Self::TurnAnytime,
+        Self::TurnMorning,
+        Self::TurnAfternoon,
+        Self::TurnEvening,
+        Self::PriorityLow,
+        Self::PriorityMedium,
+        Self::PriorityHigh,
+        Self::PriorityUrgent,
+        Self::MascotMochi,
+    ];
+
+    /// Identificador único em kebab-case.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        self.spec().name
+    }
+
+    /// Documento SVG colorido completo preservando preenchimentos e traços próprios.
+    #[must_use]
+    pub fn to_svg_string(self) -> String {
+        let spec = self.spec();
+        format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{body}</svg>"#,
+            vb = spec.view_box,
+            body = spec.body
+        )
+    }
+
+    /// Handle SVG pré-carregado em cache estático (zero alocação por frame).
+    #[must_use]
+    pub fn cached_handle(self) -> svg::Handle {
+        let idx = Self::ALL
+            .iter()
+            .position(|candidate| *candidate == self)
+            .unwrap_or(0);
+        CACHED_ILLUSTRATED_HANDLES[idx].clone()
+    }
+
+    fn spec(self) -> &'static IllustratedSpec {
+        ILLUSTRATED_SPECS
+            .iter()
+            .find(|spec| spec.icon == self)
+            .unwrap_or(&ILLUSTRATED_SPECS[0])
     }
 }
 

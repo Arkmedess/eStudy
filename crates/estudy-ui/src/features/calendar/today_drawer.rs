@@ -7,7 +7,8 @@ use estudy_ui_kit::widgets::{
 };
 use estudy_ui_kit::{
     CategoryColor, EstudyTheme, FONT_MONO, FONT_MONO_MEDIUM, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD,
-    FONT_SERIF_MEDIUM, Icon, RADIUS_CONTROL, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3,
+    FONT_SERIF_MEDIUM, FONT_SIZE_2XL, FONT_SIZE_BASE, FONT_SIZE_MD, FONT_SIZE_SM, FONT_SIZE_XS,
+    Icon, RADIUS_CONTROL, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3,
 };
 use iced::widget::{button, column, container, row, scrollable, text};
 use iced::{Alignment, Border, Element, Length};
@@ -28,7 +29,7 @@ pub fn view_today_drawer<'a, Message: Clone + 'a>(
     let header = row![
         column![
             text("Hoje")
-                .size(22)
+                .size(FONT_SIZE_2XL)
                 .font(FONT_SERIF_MEDIUM)
                 .color(theme.text_primary),
             text(format!(
@@ -37,12 +38,12 @@ pub fn view_today_drawer<'a, Message: Clone + 'a>(
                 today.day(),
                 month_pt(today.month())
             ))
-            .size(12)
+            .size(FONT_SIZE_BASE)
             .color(theme.text_muted),
         ]
         .spacing(2.0)
         .width(Length::Fill),
-        button(icon_svg(Icon::X, 15.0, theme.text_muted))
+        button(icon_svg(Icon::X, 16.0, theme.text_muted))
             .on_press(map_msg(CalendarMessage::CloseTodayDrawer))
             .padding(SPACE_1)
             .style(move |_, status| theme.ghost_button_style(status)),
@@ -67,7 +68,7 @@ pub fn view_today_drawer<'a, Message: Clone + 'a>(
         ]
         .spacing(SPACE_3)
         .height(Length::Fill),
-        440.0,
+        460.0,
         theme,
     )
 }
@@ -86,7 +87,7 @@ fn view_week_strip<'a, Message: 'a>(
         let is_today = day == today;
         let badge = container(
             text(format!("{}", day.day()))
-                .size(12)
+                .size(FONT_SIZE_BASE)
                 .font(FONT_MONO_MEDIUM)
                 .color(if is_today {
                     theme.on_accent
@@ -94,10 +95,10 @@ fn view_week_strip<'a, Message: 'a>(
                     theme.text_primary
                 }),
         )
-        .width(Length::Fixed(28.0))
-        .height(Length::Fixed(28.0))
-        .center_x(Length::Fixed(28.0))
-        .center_y(Length::Fixed(28.0))
+        .width(Length::Fixed(30.0))
+        .height(Length::Fixed(30.0))
+        .center_x(Length::Fixed(30.0))
+        .center_y(Length::Fixed(30.0))
         .style(move |_| container::Style {
             background: is_today.then(|| theme.accent.into()),
             border: Border {
@@ -111,7 +112,7 @@ fn view_week_strip<'a, Message: 'a>(
         strip = strip.push(
             column![
                 text(*short)
-                    .size(10)
+                    .size(FONT_SIZE_XS)
                     .font(FONT_SANS_MEDIUM)
                     .color(theme.text_muted),
                 badge,
@@ -134,7 +135,7 @@ fn view_unscheduled_section<'a, Message: 'a>(
     if timeline.unscheduled.is_empty() {
         items = items.push(
             text("Nenhum lembrete sem horário para hoje.")
-                .size(12)
+                .size(FONT_SIZE_BASE)
                 .color(theme.text_muted),
         );
     } else {
@@ -151,7 +152,7 @@ fn view_unscheduled_section<'a, Message: 'a>(
                     row![
                         color_dot(category.solid(theme)),
                         text(occ.title.clone())
-                            .size(12)
+                            .size(FONT_SIZE_BASE)
                             .font(FONT_SANS_MEDIUM)
                             .color(theme.text_primary),
                     ]
@@ -236,7 +237,7 @@ fn view_timeline_slots<'a, Message: 'a>(
     if timeline.slots.is_empty() {
         col = col.push(soft_surface(
             text("Dia livre. Aproveite para focar nos seus projetos ou descansar.")
-                .size(12)
+                .size(FONT_SIZE_BASE)
                 .color(theme.text_muted),
             theme,
         ));
@@ -274,7 +275,7 @@ fn view_busy_slot_row<'a, Message: 'a>(
     };
     let hour_label = format!("{:02}:{:02}", start_minute / 60, start_minute % 60);
 
-    let capsule = container(icon_svg(icon, 14.0, category.solid(theme)))
+    let capsule = container(icon_svg(icon, 15.0, category.solid(theme)))
         .width(Length::Fixed(34.0))
         .height(Length::Fixed(capsule_h))
         .center_x(Length::Fixed(34.0))
@@ -292,19 +293,19 @@ fn view_busy_slot_row<'a, Message: 'a>(
     row![
         container(
             text(hour_label)
-                .size(11)
+                .size(FONT_SIZE_SM)
                 .font(FONT_MONO)
                 .color(theme.text_muted),
         )
-        .width(Length::Fixed(46.0)),
+        .width(Length::Fixed(54.0)),
         capsule,
         column![
             text(format!("{time_range} · {duration} min"))
-                .size(11)
+                .size(FONT_SIZE_SM)
                 .font(FONT_MONO)
                 .color(theme.text_muted),
             text(title)
-                .size(13)
+                .size(FONT_SIZE_MD)
                 .font(FONT_SANS_SEMIBOLD)
                 .color(theme.text_primary),
         ]
@@ -339,12 +340,12 @@ fn view_free_slot_row<'a, Message: 'a>(
         });
 
     row![
-        container(text("")).width(Length::Fixed(46.0)),
+        container(text("")).width(Length::Fixed(54.0)),
         container(guide)
             .width(Length::Fixed(34.0))
             .center_x(Length::Fixed(34.0)),
         text(free_label)
-            .size(11)
+            .size(FONT_SIZE_SM)
             .font(FONT_MONO)
             .color(theme.text_muted),
     ]
@@ -355,7 +356,7 @@ fn view_free_slot_row<'a, Message: 'a>(
 
 fn view_now_rule<'a, Message: 'a>(label: String, theme: EstudyTheme) -> Element<'a, Message> {
     let line_left = container(text("").size(1))
-        .width(Length::Fixed(46.0))
+        .width(Length::Fixed(54.0))
         .height(Length::Fixed(1.5))
         .style(move |_| container::Style {
             background: Some(theme.danger.into()),
@@ -372,7 +373,7 @@ fn view_now_rule<'a, Message: 'a>(label: String, theme: EstudyTheme) -> Element<
     row![
         line_left,
         text(label)
-            .size(11)
+            .size(FONT_SIZE_SM)
             .font(FONT_MONO_MEDIUM)
             .color(theme.danger),
         line_right,

@@ -57,6 +57,7 @@ if [[ "$CI_MODE" == "false" ]] && { [[ -n "${WAYLAND_DISPLAY:-}" ]] || [[ -n "${
 
   if kill -0 "$DESKTOP_PID" 2>/dev/null; then
     RSS_KB="$(awk '/VmRSS:/ {print $2}' "/proc/$DESKTOP_PID/status")"
+    ANON_KB="$(awk '/RssAnon:/ {print $2}' "/proc/$DESKTOP_PID/status")"
     HWM_KB="$(awk '/VmHWM:/ {print $2}' "/proc/$DESKTOP_PID/status")"
     THREADS="$(awk '/Threads:/ {print $2}' "/proc/$DESKTOP_PID/status")"
     CPU_TICKS="$(awk '{print $14 + $15}' "/proc/$DESKTOP_PID/stat")"
@@ -67,11 +68,12 @@ if [[ "$CI_MODE" == "false" ]] && { [[ -n "${WAYLAND_DISPLAY:-}" ]] || [[ -n "${
     wait "$DESKTOP_PID" 2>/dev/null || true
 
     RSS_MIB="$(awk -v kb="$RSS_KB" 'BEGIN {printf "%.2f", kb / 1024}')"
+    ANON_MIB="$(awk -v kb="${ANON_KB:-$RSS_KB}" 'BEGIN {printf "%.2f", kb / 1024}')"
     HWM_MIB="$(awk -v kb="$HWM_KB" 'BEGIN {printf "%.2f", kb / 1024}')"
-    echo "estudy-desktop -> VmRSS: ${RSS_MIB} MiB (${RSS_KB} kB) | VmHWM: ${HWM_MIB} MiB | CPU(2s): ${CPU_MS} ms (~${CPU_PCT}%) | Threads: ${THREADS}"
+    echo "estudy-desktop -> RssAnon (privada): ${ANON_MIB} MiB | VmRSS (c/ driver GPU): ${RSS_MIB} MiB | VmHWM: ${HWM_MIB} MiB | CPU(2s): ${CPU_MS} ms (~${CPU_PCT}%) | Threads: ${THREADS}"
 
-    if awk -v rss="$RSS_MIB" -v max="$MAX_IDLE_RSS_MIB" 'BEGIN {exit !(rss > max)}'; then
-      echo "ERRO: RSS (${RSS_MIB} MiB) excedeu o teto de ${MAX_IDLE_RSS_MIB} MiB."
+    if awk -v anon="$ANON_MIB" -v max="$MAX_IDLE_RSS_MIB" 'BEGIN {exit !(anon > max)}'; then
+      echo "ERRO: RssAnon privada (${ANON_MIB} MiB) excedeu o teto de ${MAX_IDLE_RSS_MIB} MiB."
       exit 1
     fi
   else

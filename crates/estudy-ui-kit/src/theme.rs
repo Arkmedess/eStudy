@@ -1,7 +1,7 @@
 //! Tokens visuais, os 5 presets WCAG 2.2 AA e slots cosméticos do eStudy.
 
 use iced::widget::{button, container, text_input};
-use iced::{Border, Color, Shadow};
+use iced::{Border, Color, Shadow, Vector};
 
 /// Unidade base de espaçamento (`4px`).
 pub const SPACE_1: f32 = 4.0;
@@ -18,12 +18,12 @@ pub const SPACE_6: f32 = 24.0;
 /// Espaçamento amplo de seção (`32px`).
 pub const SPACE_8: f32 = 32.0;
 
-/// Altura fixa da barra superior discreta (`44px`).
-pub const TOPBAR_HEIGHT: f32 = 44.0;
-/// Largura padrão da barra lateral principal expandida (`220px`).
-pub const SIDEBAR_WIDTH: f32 = 220.0;
-/// Largura da barra lateral principal comprimida em trilho de ícones (`72px`).
-pub const SIDEBAR_COMPACT_WIDTH: f32 = 72.0;
+/// Altura fixa da barra superior discreta legada (`50px`).
+pub const TOPBAR_HEIGHT: f32 = 50.0;
+/// Largura padrão da barra lateral principal expandida (`216px`).
+pub const SIDEBAR_WIDTH: f32 = 216.0;
+/// Largura da barra lateral principal recolhida em trilho limpo de ícones (`58px`).
+pub const SIDEBAR_COMPACT_WIDTH: f32 = 58.0;
 
 /// Raio amplo e orgânico de gavetas flutuantes (`20px`).
 pub const RADIUS_DRAWER: f32 = 20.0;
@@ -267,32 +267,32 @@ impl EstudyTheme {
             ThemeMode::Light => Self::make(
                 ThemePreset::OlivaOrganico,
                 mode,
-                rgb(0xf7_f4_ee),
-                rgb(0xf2_ee_e6),
-                rgb(0xef_ec_e4),
+                rgb(0xf6_f3_ec),
+                rgb(0xea_e5_db),
+                rgb(0xe8_e3_d8),
                 rgb(0xff_ff_ff),
-                rgb(0xf4_f1_ea),
-                rgba(0x1f_26_20, 0.12),
-                rgb(0x14_19_15),
-                rgb(0x3a_44_3b),
-                rgb(0x3f_54_43),
+                rgb(0xf0_ec_e3),
+                rgba(0x1f_26_20, 0.10),
+                rgb(0x11_16_12),
+                rgb(0x2f_3a_31),
+                rgb(0x37_4c_3b),
                 rgb(0xff_ff_ff),
-                rgba(0x3f_54_43, 0.12),
+                rgba(0x37_4c_3b, 0.14),
             ),
             ThemeMode::Dark => Self::make(
                 ThemePreset::OlivaOrganico,
                 mode,
-                rgb(0x12_14_11),
+                rgb(0x10_12_0f),
+                rgb(0x1b_20_19),
                 rgb(0x16_19_15),
-                rgb(0x1a_1d_18),
-                rgb(0x21_25_1f),
-                rgb(0x28_2d_25),
-                rgba(0xff_ff_ff, 0.12),
-                rgb(0xf4_f7_f2),
-                rgb(0xc2_cb_bf),
-                rgb(0xa8_be_9e),
-                rgb(0x12_14_11),
-                rgba(0xa8_be_9e, 0.18),
+                rgb(0x22_27_20),
+                rgb(0x2b_31_28),
+                rgba(0xff_ff_ff, 0.11),
+                rgb(0xf6_f9_f4),
+                rgb(0xc9_d3_c6),
+                rgb(0xb2_c9_a8),
+                rgb(0x10_12_0f),
+                rgba(0xb2_c9_a8, 0.20),
             ),
         }
     }
@@ -302,32 +302,32 @@ impl EstudyTheme {
             ThemeMode::Dark => Self::make(
                 ThemePreset::EstudyMenta,
                 mode,
-                rgb(0x07_07_09),
-                rgb(0x0c_0d_11),
-                rgb(0x0f_10_15),
-                rgb(0x13_14_1a),
-                rgb(0x1a_1c_24),
-                rgba(0xff_ff_ff, 0.12),
+                rgb(0x07_08_0a),
+                rgb(0x13_16_1d),
+                rgb(0x000e_1016),
+                rgb(0x18_1b_24),
+                rgb(0x0022_2632),
+                rgba(0xff_ff_ff, 0.11),
                 rgb(0xf8_fa_fc),
-                rgb(0xb8_c4_d4),
+                rgb(0xc3_cf_de),
                 rgb(0x86_ef_ac),
-                rgb(0x07_07_09),
-                rgba(0x86_ef_ac, 0.16),
+                rgb(0x07_08_0a),
+                rgba(0x86_ef_ac, 0.18),
             ),
             ThemeMode::Light => Self::make(
                 ThemePreset::EstudyMenta,
                 mode,
-                rgb(0xf8_fa_fc),
-                rgb(0xf4_f7_fb),
-                rgb(0xf1_f5_f9),
+                rgb(0xf4_f7_fa),
+                rgb(0xe6_ed_f4),
+                rgb(0xe8_ef_f6),
                 rgb(0xff_ff_ff),
-                rgb(0xf4_f8_fb),
-                rgba(0x0f_17_2a, 0.11),
+                rgb(0xed_f3_f9),
+                rgba(0x0f_17_2a, 0.10),
                 rgb(0x0a_10_1f),
-                rgb(0x33_41_55),
-                rgb(0x15_80_3d),
+                rgb(0x2c_3a_4e),
+                rgb(0x0f_61_2e),
                 rgb(0xff_ff_ff),
-                rgba(0x15_80_3d, 0.12),
+                rgba(0x0f_61_2e, 0.14),
             ),
         }
     }
@@ -337,32 +337,32 @@ impl EstudyTheme {
             ThemeMode::Dark => Self::make(
                 ThemePreset::CyberMinimalist,
                 mode,
+                rgb(0x05_08_14),
+                rgb(0x10_18_2d),
+                rgb(0x0b_12_24),
+                rgb(0x14_1e_36),
+                rgb(0x1c_29_47),
+                rgba(0xe2_e8_f0, 0.11),
+                rgb(0xf4_f8_fc),
+                rgb(0xb2_c1_d6),
+                rgb(0x4c_c9_ff),
                 rgb(0x04_07_11),
-                rgb(0x07_0c_18),
-                rgb(0x0a_10_20),
-                rgb(0x0f_17_2a),
-                rgb(0x16_20_38),
-                rgba(0xe2_e8_f0, 0.10),
-                rgb(0xf1_f5_f9),
-                rgb(0x94_a3_b8),
-                rgb(0x38_bd_f8),
-                rgb(0x04_07_11),
-                rgba(0x38_bd_f8, 0.16),
+                rgba(0x4c_c9_ff, 0.18),
             ),
             ThemeMode::Light => Self::make(
                 ThemePreset::CyberMinimalist,
                 mode,
-                rgb(0xf0_f7_ff),
-                rgb(0xe8_f3_fe),
-                rgb(0xe0_f0_fe),
+                rgb(0xef_f6_ff),
+                rgb(0xdd_eb_fa),
+                rgb(0xdf_ed_fc),
                 rgb(0xff_ff_ff),
-                rgb(0xf2_f8_ff),
-                rgba(0x0c_4a_6e, 0.09),
-                rgb(0x0c_1a_2e),
-                rgb(0x33_4e_68),
-                rgb(0x03_69_a1),
+                rgb(0xe8_f2_fe),
+                rgba(0x0c_4a_6e, 0.10),
+                rgb(0x0b_18_2b),
+                rgb(0x27_42_5c),
+                rgb(0x02_5e_91),
                 rgb(0xff_ff_ff),
-                rgba(0x03_69_a1, 0.12),
+                rgba(0x02_5e_91, 0.14),
             ),
         }
     }
@@ -373,31 +373,31 @@ impl EstudyTheme {
                 ThemePreset::SolarAmber,
                 mode,
                 rgb(0x0e_0b_08),
-                rgb(0x13_10_0b),
-                rgb(0x17_13_0e),
-                rgb(0x1f_1a_13),
-                rgb(0x28_21_18),
-                rgba(0xfe_f3_c7, 0.10),
-                rgb(0xfc_f6_ec),
-                rgb(0xc2_b2_9b),
-                rgb(0xfb_bf_24),
+                rgb(0x1e_18_12),
+                rgb(0x17_12_0d),
+                rgb(0x24_1d_15),
+                rgb(0x2f_26_1c),
+                rgba(0xfe_f3_c7, 0.11),
+                rgb(0xfd_f8_ef),
+                rgb(0xd1_c1_ac),
+                rgb(0xfc_c7_38),
                 rgb(0x0e_0b_08),
-                rgba(0xfb_bf_24, 0.16),
+                rgba(0xfc_c7_38, 0.18),
             ),
             ThemeMode::Light => Self::make(
                 ThemePreset::SolarAmber,
                 mode,
-                rgb(0xfe_f9_ee),
-                rgb(0xfe_f6_db),
-                rgb(0xfe_f3_c7),
+                rgb(0xfe_f8_ec),
+                rgb(0xf7_ea_cc),
+                rgb(0xf9_ed_d1),
                 rgb(0xff_ff_ff),
-                rgb(0xfe_f7_e5),
+                rgb(0xfc_f2_da),
                 rgba(0x78_35_0f, 0.10),
-                rgb(0x29_1d_0e),
-                rgb(0x5c_43_24),
-                rgb(0x92_40_0e),
+                rgb(0x24_18_0a),
+                rgb(0x4b_35_19),
+                rgb(0x84_38_0a),
                 rgb(0xff_ff_ff),
-                rgba(0x92_40_0e, 0.12),
+                rgba(0x84_38_0a, 0.14),
             ),
         }
     }
@@ -408,31 +408,31 @@ impl EstudyTheme {
                 ThemePreset::VelvetSakura,
                 mode,
                 rgb(0x0d_08_0b),
-                rgb(0x12_0b_0f),
+                rgb(0x1c_12_18),
                 rgb(0x16_0e_13),
-                rgb(0x1d_13_19),
-                rgb(0x26_19_21),
-                rgba(0xfc_e7_f3, 0.10),
-                rgb(0xfb_f1_f6),
-                rgb(0xc4_a1_b4),
-                rgb(0xf4_72_b6),
+                rgb(0x23_17_1e),
+                rgb(0x2e_1f_28),
+                rgba(0xfc_e7_f3, 0.11),
+                rgb(0xfd_f3_f8),
+                rgb(0xd4_b4_c6),
+                rgb(0xf7_86_c0),
                 rgb(0x0d_08_0b),
-                rgba(0xf4_72_b6, 0.16),
+                rgba(0xf7_86_c0, 0.18),
             ),
             ThemeMode::Light => Self::make(
                 ThemePreset::VelvetSakura,
                 mode,
-                rgb(0xfa_f7_f5),
-                rgb(0xfd_f0_f7),
-                rgb(0xfc_e7_f3),
+                rgb(0xfa_f5_f7),
+                rgb(0xf5_de_ea),
+                rgb(0xf7_e2_ee),
                 rgb(0xff_ff_ff),
-                rgb(0xfd_f2_f8),
-                rgba(0x83_18_43, 0.09),
-                rgb(0x28_10_1c),
-                rgb(0x63_33_4b),
-                rgb(0xbe_18_5d),
+                rgb(0xf9_ea_f2),
+                rgba(0x83_18_43, 0.10),
+                rgb(0x24_0d_18),
+                rgb(0x52_26_3c),
+                rgb(0xaa_14_52),
                 rgb(0xff_ff_ff),
-                rgba(0xbe_18_5d, 0.11),
+                rgba(0xaa_14_52, 0.13),
             ),
         }
     }
@@ -454,8 +454,8 @@ impl EstudyTheme {
         accent_subtle: Color,
     ) -> Self {
         let (success, warning, danger) = match mode {
-            ThemeMode::Light => (rgb(0x15_80_3d), rgb(0xb4_53_09), rgb(0xb9_1c_1c)),
-            ThemeMode::Dark => (rgb(0x4a_de_80), rgb(0xfb_bf_24), rgb(0xf8_71_71)),
+            ThemeMode::Light => (rgb(0x0f_61_2e), rgb(0x84_37_06), rgb(0xa6_17_17)),
+            ThemeMode::Dark => (rgb(0x5b_e4_8f), rgb(0xfc_c7_38), rgb(0xfb_85_85)),
         };
 
         Self {
@@ -494,7 +494,31 @@ impl EstudyTheme {
         }
     }
 
-    /// Estilo de cartão elevado principal com cantos suaves e borda hairline.
+    const fn card_shadow(&self) -> Shadow {
+        let alpha = match self.mode {
+            ThemeMode::Light => 0.045,
+            ThemeMode::Dark => 0.22,
+        };
+        Shadow {
+            color: Color::from_rgba(0.08, 0.06, 0.04, alpha),
+            offset: Vector::new(0.0, 2.0),
+            blur_radius: 10.0,
+        }
+    }
+
+    const fn elevated_shadow(&self) -> Shadow {
+        let alpha = match self.mode {
+            ThemeMode::Light => 0.14,
+            ThemeMode::Dark => 0.42,
+        };
+        Shadow {
+            color: Color::from_rgba(0.06, 0.05, 0.04, alpha),
+            offset: Vector::new(0.0, 8.0),
+            blur_radius: 26.0,
+        }
+    }
+
+    /// Estilo de cartão elevado principal com cantos suaves, hairline delicada e sombra sutil.
     #[must_use]
     pub fn card_style(&self) -> container::Style {
         container::Style {
@@ -505,7 +529,7 @@ impl EstudyTheme {
                 width: 1.0,
                 radius: RADIUS_CARD.into(),
             },
-            shadow: Shadow::default(),
+            shadow: self.card_shadow(),
             snap: true,
         }
     }
@@ -521,7 +545,7 @@ impl EstudyTheme {
                 width: 0.0,
                 radius: RADIUS_CARD.into(),
             },
-            shadow: Shadow::default(),
+            shadow: self.card_shadow(),
             snap: true,
         }
     }
@@ -585,7 +609,23 @@ impl EstudyTheme {
                 width: 1.0,
                 radius: RADIUS_CARD.into(),
             },
-            shadow: Shadow::default(),
+            shadow: self.elevated_shadow(),
+            snap: true,
+        }
+    }
+
+    /// Superfície flutuante para menus de contexto no cursor e cartões em Drag & Drop.
+    #[must_use]
+    pub fn floating_menu_style(&self) -> container::Style {
+        container::Style {
+            background: Some(self.card.into()),
+            text_color: Some(self.text_primary),
+            border: Border {
+                color: self.border_subtle,
+                width: 1.0,
+                radius: RADIUS_PANEL.into(),
+            },
+            shadow: self.elevated_shadow(),
             snap: true,
         }
     }
@@ -751,16 +791,28 @@ impl EstudyTheme {
     /// Estilo suave para campos de texto alinhados ao tema ativo.
     #[must_use]
     pub fn soft_input_style(&self, status: text_input::Status) -> text_input::Style {
-        let border_color = match status {
-            text_input::Status::Focused { .. } => self.accent,
-            text_input::Status::Hovered => self.text_muted,
-            text_input::Status::Active | text_input::Status::Disabled => self.border_subtle,
+        let (border_color, border_width) = match status {
+            text_input::Status::Focused { .. } => (self.accent, 1.5),
+            text_input::Status::Hovered => (
+                Color {
+                    a: 0.65,
+                    ..self.text_muted
+                },
+                1.0,
+            ),
+            text_input::Status::Active | text_input::Status::Disabled => (
+                Color {
+                    a: 0.40,
+                    ..self.text_muted
+                },
+                1.0,
+            ),
         };
         text_input::Style {
             background: self.surface_soft.into(),
             border: Border {
                 color: border_color,
-                width: 1.0,
+                width: border_width,
                 radius: RADIUS_CONTROL.into(),
             },
             icon: self.text_muted,
@@ -845,22 +897,22 @@ impl CategoryColor {
     pub const fn solid(self, theme: EstudyTheme) -> Color {
         match theme.mode {
             ThemeMode::Light => match self {
-                Self::Sage => rgb(0x004E_7A5B),
-                Self::Terracotta => rgb(0x00B8_5D43),
-                Self::Slate => rgb(0x004A_6B82),
-                Self::Ochre => rgb(0x00B0_7A2A),
-                Self::Lavender => rgb(0x0073_628A),
-                Self::Moss => rgb(0x003D_5A45),
-                Self::Coral => rgb(0x00C2_6D5E),
+                Self::Sage => rgb(0x0034_5B40),
+                Self::Terracotta => rgb(0x0091_3A23),
+                Self::Slate => rgb(0x0037_5469),
+                Self::Ochre => rgb(0x0075_4B0C),
+                Self::Lavender => rgb(0x005A_4970),
+                Self::Moss => rgb(0x002C_4734),
+                Self::Coral => rgb(0x0092_3528),
             },
             ThemeMode::Dark => match self {
-                Self::Sage => rgb(0x008C_C49B),
-                Self::Terracotta => rgb(0x00E8_947C),
-                Self::Slate => rgb(0x008D_B7D4),
-                Self::Ochre => rgb(0x00E8_B96B),
-                Self::Lavender => rgb(0x00B8_A6D4),
-                Self::Moss => rgb(0x007E_B88E),
-                Self::Coral => rgb(0x00EC_9E90),
+                Self::Sage => rgb(0x0096_CFA5),
+                Self::Terracotta => rgb(0x00F0_A28C),
+                Self::Slate => rgb(0x009B_C2DE),
+                Self::Ochre => rgb(0x00F0_C67A),
+                Self::Lavender => rgb(0x00C5_B5DF),
+                Self::Moss => rgb(0x008C_C79C),
+                Self::Coral => rgb(0x00F2_AB9E),
             },
         }
     }

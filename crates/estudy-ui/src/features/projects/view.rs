@@ -1,369 +1,1000 @@
-//! Renderização da fatia Projetos: barra contextual (240px), Kanban, frameworks e Drawer lateral.
+//! Renderização fluida da tela `Tarefas` (`Semana | Calendário | Kanban`), bandeja `SEM DIA` e cartões táteis.
 
 use chrono::{Datelike, Duration, NaiveDate};
-use estudy_domain::{
-    EisenhowerQuadrant, MAX_TASK_CHECKLIST_ITEMS, ProjectFramework, Task, TaskPriority, TaskStatus,
-    TaskTurn, classify_task_turn,
-};
+use estudy_domain::{Task, TaskPriority, TaskStatus, TaskTurn, classify_task_turn, days_in_month};
 use estudy_ui_kit::widgets::{
-    card, category_pill, category_tile, color_dot, floating_drawer, hairline_divider, icon_svg,
-    panel, pill_chip, progress_track, section_header, segmented_switch, soft_surface, status_badge,
+    color_dot, editorial_page_header, hairline_divider, icon_svg, illustrated_svg, pill_chip,
+    segmented_switch, shaped_text, soft_surface,
 };
 use estudy_ui_kit::{
-    CategoryColor, EstudyTheme, FONT_MONO, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD, FONT_SERIF_MEDIUM,
-    Icon, RADIUS_CONTROL, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3, SPACE_4,
+    CategoryColor, EstudyTheme, FONT_MONO, FONT_SANS, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD,
+    FONT_SIZE_BASE, FONT_SIZE_MD, FONT_SIZE_SM, FONT_SIZE_XS, Icon, IllustratedIcon, RADIUS_CARD,
+    RADIUS_CONTROL, RADIUS_PANEL, RADIUS_PILL, SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_5,
+    SPACE_6,
 };
-use iced::widget::{button, column, container, row, scrollable, stack, text, text_input};
-use iced::{Alignment, Border, Element, Length};
-use std::collections::BTreeMap;
+use iced::widget::{button, column, container, mouse_area, row, scrollable, stack, text};
+use iced::{Alignment, Border, Color, Element, Length};
 
-use super::state::{DescriptionTab, ProjectsMessage, ProjectsState, TaskDrawerState};
+use super::modals::{
+    month_name_pt, project_tag_inline, task_status_visual, view_day_peek_modal, view_drag_ghost,
+    view_task_context_menu, view_task_modal,
+};
+use super::state::{DragTarget, ProjectsMessage, ProjectsState, TasksViewMode, extract_task_date};
 use crate::features::home::TodayItem;
 
-/// Largura fixa da barra lateral esquerda contextual (`240px`).
-pub const CONTEXT_SIDEBAR_WIDTH: f32 = 240.0;
+/// Largura mantida como constante pública de compatibilidade.
+pub const CONTEXT_SIDEBAR_WIDTH: f32 = 264.0;
 
-/// Renderiza a visão completa de Projetos com barra contextual opcional e Drawer sobreposto.
+/// Renderiza a tela completa de Tarefas sem segunda sidebar, com Drag & Drop, Menu de Contexto e Modais.
 pub fn view_projects<'a, Message: Clone + 'a>(
     state: &'a ProjectsState,
     today: NaiveDate,
-    today_summary: &'a [TodayItem],
+    _today_summary: &'a [TodayItem],
     theme: EstudyTheme,
     map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
-    let main_area = view_main_workspace(state, theme, map_msg.clone());
+    let new_task_btn = button(
+        row![
+            icon_svg(Icon::Plus, 16.0, theme.text_primary),
+            shaped_text(
+                "Nova tarefa",
+                FONT_SIZE_BASE,
+                FONT_SANS_MEDIUM,
+                theme.text_primary
+            ),
+        ]
+        .spacing(6.0)
+        .align_y(Alignment::Center),
+    )
+    .on_press(map_msg(ProjectsMessage::OpenCreateTaskModal {
+        date: Some(today),
+        turn: TaskTurn::Anytime,
+    }))
+    .padding([8.0, 16.0])
+    .style(move |_, status| button::Style {
+        background: Some(
+            if matches!(status, button::Status::Hovered) {
+                theme.card_hover
+            } else {
+                theme.card
+            }
+            .into(),
+        ),
+        text_color: theme.text_primary,
+        border: Border {
+            color: theme.border_subtle,
+            width: 1.0,
+            radius: RADIUS_PILL.into(),
+        },
+        shadow: theme.card_style().shadow,
+        snap: true,
+    });
 
-    let content: Element<'a, Message> = if state.sidebar_visible {
-        let sidebar = view_context_sidebar(state, today, today_summary, theme, map_msg.clone());
-        row![sidebar, main_area]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
-    } else {
-        main_area
+    let page_header = editorial_page_header(
+        "ESTUDY  /  TAREFAS",
+        "Tarefas",
+        "A semana e o calendário",
+        Some(new_task_btn.into()),
+        theme,
+    );
+
+    let controls_bar = view_controls_bar(state, theme, map_msg.clone());
+
+    let main_body: Element<'a, Message> = match state.view_mode {
+        TasksViewMode::Week => view_week_workspace(state, today, theme, &map_msg),
+        TasksViewMode::Calendar => view_tasks_calendar_grid(state, today, theme, &map_msg),
+        TasksViewMode::Kanban => view_kanban_board(state, theme, &map_msg),
     };
 
-    if let (Some(drawer), Some(task)) = (&state.drawer, state.drawer_task()) {
-        let overlay = view_task_drawer(state, drawer, task, theme, map_msg);
-        stack![content, overlay].into()
+    let page_shell = container(
+        column![page_header, controls_bar, main_body]
+            .spacing(SPACE_4)
+            .width(Length::Fill)
+            .height(Length::Fill),
+    )
+    .padding([SPACE_5, SPACE_6])
+    .width(Length::Fill)
+    .height(Length::Fill);
+
+    let base: Element<'a, Message> = if state.dragging_task_id.is_some() {
+        mouse_area(page_shell)
+            .on_release(map_msg(ProjectsMessage::DropTask))
+            .into()
     } else {
-        content
+        page_shell.into()
+    };
+
+    let mut layers: Vec<Element<'a, Message>> = vec![base];
+
+    if let Some(ghost) = view_drag_ghost(state, theme) {
+        layers.push(ghost);
     }
+    if let Some(peek_date) = state.day_peek_date {
+        layers.push(view_day_peek_modal(
+            state,
+            peek_date,
+            theme,
+            map_msg.clone(),
+        ));
+    }
+    if let Some(modal) = &state.task_modal {
+        layers.push(view_task_modal(state, modal, today, theme, map_msg.clone()));
+    }
+    if let Some(menu) = &state.context_menu {
+        layers.push(view_task_context_menu(state, menu, theme, map_msg));
+    }
+
+    stack(layers)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
 
-fn view_context_sidebar<'a, Message: Clone + 'a>(
+fn view_controls_bar<'a, Message: Clone + 'a>(
     state: &'a ProjectsState,
-    today: NaiveDate,
-    today_summary: &'a [TodayItem],
     theme: EstudyTheme,
-    map_msg: impl Fn(ProjectsMessage) -> Message + 'a,
+    map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
-    let mini_cal = view_mini_calendar(state, today, theme, &map_msg);
+    let on_mode = map_msg.clone();
+    let mode_switch = segmented_switch(
+        &TasksViewMode::ALL,
+        state.view_mode,
+        move |mode| on_mode(ProjectsMessage::SetTasksViewMode(mode)),
+        theme,
+    );
 
-    let mut today_col = column![].spacing(SPACE_1);
-    if today_summary.is_empty() {
-        today_col = today_col.push(
-            text("Sem blocos para hoje.")
-                .size(11)
-                .color(theme.text_muted),
-        );
-    } else {
-        for item in today_summary.iter().take(4) {
-            today_col = today_col.push(
-                row![
-                    text(&item.time_label).size(11).color(theme.text_muted),
-                    text(&item.title).size(11).color(theme.text_primary),
-                ]
-                .spacing(SPACE_1),
+    let period_nav: Element<'a, Message> = match state.view_mode {
+        TasksViewMode::Week => {
+            let end = state.week_start + Duration::days(6);
+            let label = format!(
+                "{} a {} de {}",
+                state.week_start.day(),
+                end.day(),
+                month_name_pt(end.month())
             );
+            row![
+                nav_arrow_btn(
+                    Icon::ChevronLeft,
+                    map_msg(ProjectsMessage::ShiftWeek(-1)),
+                    theme,
+                ),
+                shaped_text(label, FONT_SIZE_MD, FONT_SANS_MEDIUM, theme.text_primary),
+                nav_arrow_btn(
+                    Icon::ChevronRight,
+                    map_msg(ProjectsMessage::ShiftWeek(1)),
+                    theme,
+                ),
+            ]
+            .spacing(SPACE_2)
+            .align_y(Alignment::Center)
+            .into()
         }
-    }
+        TasksViewMode::Calendar => {
+            let m_name = month_name_pt(state.calendar_month);
+            let mut chars = m_name.chars();
+            let cap = chars.next().map_or_else(String::new, |first| {
+                format!("{}{}", first.to_uppercase(), chars.as_str())
+            });
+            let label = format!("{cap} de {}", state.calendar_year);
+            row![
+                nav_arrow_btn(
+                    Icon::ChevronLeft,
+                    map_msg(ProjectsMessage::ShiftCalendarMonth(-1)),
+                    theme,
+                ),
+                shaped_text(label, FONT_SIZE_MD, FONT_SANS_MEDIUM, theme.text_primary),
+                nav_arrow_btn(
+                    Icon::ChevronRight,
+                    map_msg(ProjectsMessage::ShiftCalendarMonth(1)),
+                    theme,
+                ),
+            ]
+            .spacing(SPACE_2)
+            .align_y(Alignment::Center)
+            .into()
+        }
+        TasksViewMode::Kanban => shaped_text(
+            "Quadro por etapa",
+            FONT_SIZE_BASE,
+            FONT_SANS_MEDIUM,
+            theme.text_muted,
+        )
+        .into(),
+    };
 
-    let mut proj_list = column![].spacing(SPACE_1);
-    let all_active = state.selected_project_id.is_none();
-    proj_list = proj_list.push(sidebar_project_btn(
-        "Todos os projetos",
-        all_active,
+    let mut project_filters = row![pill_chip(
+        "Todos",
+        None,
+        None,
+        state.selected_project_id.is_none(),
         map_msg(ProjectsMessage::SelectProject(None)),
         theme,
-    ));
+    )]
+    .spacing(SPACE_1)
+    .align_y(Alignment::Center);
 
-    for proj in &state.projects {
+    for (idx, proj) in state.projects.iter().enumerate() {
         let active = state.selected_project_id.as_ref() == Some(&proj.id);
-        proj_list = proj_list.push(sidebar_project_btn(
+        let dot = CategoryColor::from_index(idx).solid(theme);
+        project_filters = project_filters.push(pill_chip(
             &proj.title,
+            Some(dot),
+            None,
             active,
             map_msg(ProjectsMessage::SelectProject(Some(proj.id.clone()))),
             theme,
         ));
     }
 
+    row![
+        row![mode_switch, period_nav]
+            .spacing(SPACE_4)
+            .align_y(Alignment::Center),
+        container(project_filters)
+            .align_x(Alignment::End)
+            .width(Length::Fill),
+    ]
+    .align_y(Alignment::Center)
+    .width(Length::Fill)
+    .into()
+}
+
+fn nav_arrow_btn<'a, Message: Clone + 'a>(
+    icon: Icon,
+    on_press: Message,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    button(icon_svg(icon, 16.0, theme.text_primary))
+        .on_press(on_press)
+        .padding(6.0)
+        .style(move |_, status| theme.subtle_button_style(status))
+        .into()
+}
+
+fn view_week_workspace<'a, Message: Clone + 'a>(
+    state: &'a ProjectsState,
+    today: NaiveDate,
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let tasks = state.filtered_tasks();
+    let unscheduled: Vec<&Task> = tasks
+        .iter()
+        .copied()
+        .filter(|t| extract_task_date(t).is_none())
+        .collect();
+
+    let unscheduled_tray = view_unscheduled_tray(state, &unscheduled, theme, map_msg);
+
+    let mut days_row = row![]
+        .spacing(SPACE_3)
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+    for offset in 0..6_i64 {
+        let day = state.week_start + Duration::days(offset);
+        let day_tasks: Vec<&Task> = tasks
+            .iter()
+            .copied()
+            .filter(|t| extract_task_date(t) == Some(day))
+            .collect();
+
+        days_row = days_row.push(view_day_column(
+            state,
+            day,
+            day == today,
+            &day_tasks,
+            theme,
+            map_msg,
+        ));
+    }
+
+    column![unscheduled_tray, days_row]
+        .spacing(SPACE_3)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
+
+fn view_unscheduled_tray<'a, Message: Clone + 'a>(
+    state: &'a ProjectsState,
+    unscheduled: &[&'a Task],
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let is_drop_hovered = state.dragging_task_id.is_some()
+        && state.hovered_drop_target == Some(DragTarget::Unscheduled);
+
+    let mut items_row = row![shaped_text(
+        "SEM DIA",
+        FONT_SIZE_XS,
+        FONT_SANS_SEMIBOLD,
+        theme.text_muted
+    ),]
+    .spacing(SPACE_3)
+    .align_y(Alignment::Center);
+
+    if unscheduled.is_empty() {
+        items_row = items_row.push(shaped_text(
+            if state.dragging_task_id.is_some() {
+                "Solte aqui para deixar sem data fixa"
+            } else {
+                "Nenhuma tarefa sem data — tudo organizado na semana"
+            },
+            FONT_SIZE_SM,
+            FONT_SANS,
+            theme.text_muted,
+        ));
+    } else {
+        for task in unscheduled.iter().take(4) {
+            items_row = items_row
+                .push(container(view_task_card(state, task, theme, map_msg)).max_width(270.0));
+        }
+    }
+
+    let add_unscheduled = button(icon_svg(Icon::Plus, 16.0, theme.text_muted))
+        .on_press(map_msg(ProjectsMessage::OpenCreateTaskModal {
+            date: None,
+            turn: TaskTurn::Anytime,
+        }))
+        .padding(6.0)
+        .style(move |_, status| theme.subtle_button_style(status));
+
+    items_row = items_row.push(
+        container(add_unscheduled)
+            .align_x(Alignment::End)
+            .width(Length::Fill),
+    );
+
+    let tray = container(items_row)
+        .padding([SPACE_2, SPACE_4])
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(
+                if is_drop_hovered {
+                    theme.accent_subtle
+                } else {
+                    theme.surface_soft
+                }
+                .into(),
+            ),
+            border: Border {
+                color: if is_drop_hovered {
+                    theme.accent
+                } else {
+                    theme.border_subtle
+                },
+                width: if is_drop_hovered { 1.5 } else { 1.0 },
+                radius: RADIUS_CARD.into(),
+            },
+            ..container::Style::default()
+        });
+
+    mouse_area(tray)
+        .on_enter(map_msg(ProjectsMessage::HoverDropTarget(Some(
+            DragTarget::Unscheduled,
+        ))))
+        .on_release(map_msg(ProjectsMessage::DropTask))
+        .into()
+}
+
+fn view_day_column<'a, Message: Clone + 'a>(
+    state: &'a ProjectsState,
+    day: NaiveDate,
+    is_today: bool,
+    day_tasks: &[&'a Task],
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let open_count = day_tasks
+        .iter()
+        .filter(|t| t.status != TaskStatus::Done)
+        .count();
+    let col_header = view_day_column_header(day, is_today, open_count, theme, map_msg);
+
+    let mut periods_col = column![].spacing(SPACE_2);
+    for turn in TaskTurn::ALL {
+        periods_col = periods_col.push(view_period_drop_slot(
+            state, day, turn, day_tasks, theme, map_msg,
+        ));
+    }
+
+    let border_c = if is_today {
+        CategoryColor::Terracotta.border(theme)
+    } else {
+        theme.border_subtle
+    };
+
     container(
-        scrollable(
-            column![
-                mini_cal,
-                panel(
-                    column![section_header(Icon::Clock, "Hoje", theme), today_col].spacing(SPACE_2),
-                    theme
-                ),
-                panel(
-                    column![
-                        section_header(Icon::FolderKanban, "Projetos", theme),
-                        proj_list
-                    ]
-                    .spacing(SPACE_2),
-                    theme
-                ),
-            ]
-            .spacing(SPACE_3),
-        )
+        column![
+            col_header,
+            hairline_divider(theme),
+            scrollable(periods_col).height(Length::Fill),
+        ]
+        .spacing(SPACE_2)
         .height(Length::Fill),
     )
-    .width(Length::Fixed(CONTEXT_SIDEBAR_WIDTH))
-    .height(Length::Fill)
     .padding(SPACE_3)
+    .width(Length::FillPortion(1))
+    .height(Length::Fill)
     .style(move |_| container::Style {
-        background: Some(theme.panel.into()),
+        background: Some(
+            Color {
+                a: if theme.mode == estudy_ui_kit::ThemeMode::Light {
+                    0.55
+                } else {
+                    0.65
+                },
+                ..theme.surface_soft
+            }
+            .into(),
+        ),
         border: Border {
-            color: theme.border_subtle,
-            width: 1.0,
-            radius: 0.0.into(),
+            color: border_c,
+            width: if is_today { 1.5 } else { 1.0 },
+            radius: RADIUS_CARD.into(),
         },
         ..container::Style::default()
     })
     .into()
 }
 
-fn view_mini_calendar<'a, Message: Clone + 'a>(
+fn view_day_column_header<'a, Message: Clone + 'a>(
+    day: NaiveDate,
+    is_today: bool,
+    open_count: usize,
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let title_color = if is_today {
+        CategoryColor::Terracotta.solid(theme)
+    } else {
+        theme.text_primary
+    };
+
+    let mut header_left = row![
+        shaped_text(
+            weekday_full_pt(day.weekday()),
+            FONT_SIZE_MD,
+            FONT_SANS_SEMIBOLD,
+            title_color,
+        ),
+        shaped_text(
+            format!("{:02}/{:02}", day.day(), day.month()),
+            FONT_SIZE_SM,
+            FONT_MONO,
+            theme.text_muted,
+        ),
+    ]
+    .spacing(6.0)
+    .align_y(Alignment::Center);
+
+    if open_count > 0 {
+        header_left = header_left.push(
+            container(shaped_text(
+                format!("{open_count}"),
+                FONT_SIZE_XS,
+                FONT_MONO,
+                theme.text_muted,
+            ))
+            .padding([1.0, 6.0])
+            .style(move |_| container::Style {
+                background: Some(theme.surface_soft.into()),
+                border: Border {
+                    radius: RADIUS_PILL.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            }),
+        );
+    }
+
+    let add_day_btn = button(icon_svg(Icon::Plus, 16.0, theme.text_muted))
+        .on_press(map_msg(ProjectsMessage::OpenCreateTaskModal {
+            date: Some(day),
+            turn: TaskTurn::Anytime,
+        }))
+        .padding(4.0)
+        .style(move |_, status| theme.subtle_button_style(status));
+
+    row![
+        header_left,
+        container(add_day_btn)
+            .align_x(Alignment::End)
+            .width(Length::Fill),
+    ]
+    .align_y(Alignment::Center)
+    .into()
+}
+
+fn view_period_drop_slot<'a, Message: Clone + 'a>(
+    state: &'a ProjectsState,
+    day: NaiveDate,
+    turn: TaskTurn,
+    day_tasks: &[&'a Task],
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let mut matching: Vec<&Task> = day_tasks
+        .iter()
+        .copied()
+        .filter(|t| {
+            classify_task_turn(t.start_at.as_deref(), t.due_at.as_deref(), t.priority) == turn
+        })
+        .collect();
+    matching.sort_by_key(|t| t.status == TaskStatus::Done);
+
+    let target = DragTarget::DayTurn { date: day, turn };
+    let is_hovered = state.dragging_task_id.is_some() && state.hovered_drop_target == Some(target);
+
+    let period_header = row![
+        illustrated_svg(turn_illustrated_icon(turn), 16.0),
+        shaped_text(
+            turn.label().to_uppercase(),
+            FONT_SIZE_XS,
+            FONT_SANS_SEMIBOLD,
+            turn_label_color(turn, theme),
+        ),
+        container(
+            button(icon_svg(Icon::Plus, 14.0, theme.text_muted))
+                .on_press(map_msg(ProjectsMessage::OpenCreateTaskModal {
+                    date: Some(day),
+                    turn,
+                }))
+                .padding(2.0)
+                .style(move |_, status| theme.subtle_button_style(status)),
+        )
+        .align_x(Alignment::End)
+        .width(Length::Fill),
+    ]
+    .spacing(5.0)
+    .align_y(Alignment::Center);
+
+    let mut slot_col = column![period_header].spacing(SPACE_2);
+
+    if matching.is_empty() {
+        slot_col = slot_col.push(
+            container(shaped_text(
+                "Arraste para cá",
+                FONT_SIZE_XS,
+                FONT_SANS,
+                Color {
+                    a: if is_hovered { 0.95 } else { 0.55 },
+                    ..theme.text_muted
+                },
+            ))
+            .padding([SPACE_3, SPACE_2])
+            .center_x(Length::Fill)
+            .width(Length::Fill),
+        );
+    } else {
+        for task in matching {
+            slot_col = slot_col.push(view_task_card(state, task, theme, map_msg));
+        }
+    }
+
+    let slot_box = container(slot_col)
+        .padding(SPACE_2)
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: if is_hovered {
+                Some(theme.accent_subtle.into())
+            } else {
+                None
+            },
+            border: Border {
+                color: if is_hovered {
+                    theme.accent
+                } else {
+                    Color {
+                        a: 0.55,
+                        ..theme.border_subtle
+                    }
+                },
+                width: if is_hovered { 1.5 } else { 1.0 },
+                radius: RADIUS_PANEL.into(),
+            },
+            ..container::Style::default()
+        });
+
+    mouse_area(slot_box)
+        .on_enter(map_msg(ProjectsMessage::HoverDropTarget(Some(target))))
+        .on_release(map_msg(ProjectsMessage::DropTask))
+        .into()
+}
+
+/// Cartão tátil de tarefa com check circular `○ -> ✓`, pílula de status clicável, clique direito e Drag & Drop.
+pub fn view_task_card<'a, Message: Clone + 'a>(
+    state: &'a ProjectsState,
+    task: &'a Task,
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let is_done = task.status == TaskStatus::Done;
+    let is_being_dragged = state.dragging_task_id.as_ref() == Some(&task.id);
+
+    let radio_circle = task_radio_toggle(
+        is_done,
+        map_msg(ProjectsMessage::ToggleTaskDone(task.id.clone())),
+        theme,
+    );
+
+    let title_btn = button(shaped_text(
+        task.title.as_str(),
+        FONT_SIZE_BASE,
+        FONT_SANS_SEMIBOLD,
+        if is_done {
+            theme.text_muted
+        } else {
+            theme.text_primary
+        },
+    ))
+    .on_press(map_msg(ProjectsMessage::OpenEditTaskModal(task.id.clone())))
+    .padding(0.0)
+    .width(Length::Fill)
+    .style(|_, _| button::Style::default());
+
+    let top_row = row![radio_circle, title_btn]
+        .spacing(SPACE_2)
+        .align_y(Alignment::Start);
+
+    let status_pill = task_status_pill(
+        task.status,
+        map_msg(ProjectsMessage::CycleTaskStatus(task.id.clone())),
+        theme,
+    );
+
+    let mut meta_row = row![status_pill]
+        .spacing(SPACE_2)
+        .align_y(Alignment::Center);
+    if let Some(proj_el) = project_tag_inline(state, task, theme) {
+        meta_row = meta_row.push(proj_el);
+    }
+    meta_row = meta_row.push(
+        container(illustrated_svg(
+            priority_illustrated_icon(task.priority),
+            16.0,
+        ))
+        .align_x(Alignment::End)
+        .width(Length::Fill),
+    );
+
+    let mut card_col = column![top_row].spacing(6.0);
+
+    let (done_chk, total_chk) = task.checklist_progress();
+    if total_chk > 0 {
+        card_col = card_col.push(
+            row![
+                icon_svg(Icon::CheckSquare, 12.0, theme.text_muted),
+                shaped_text(
+                    format!("{done_chk} de {total_chk}"),
+                    FONT_SIZE_XS,
+                    FONT_MONO,
+                    theme.text_muted,
+                ),
+            ]
+            .spacing(4.0)
+            .align_y(Alignment::Center),
+        );
+    }
+    card_col = card_col.push(meta_row);
+
+    let card_surface = container(card_col)
+        .padding([10.0, 12.0])
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(
+                Color {
+                    a: if is_being_dragged {
+                        0.45
+                    } else if is_done {
+                        0.72
+                    } else {
+                        1.0
+                    },
+                    ..theme.card
+                }
+                .into(),
+            ),
+            border: Border {
+                color: theme.border_subtle,
+                width: 1.0,
+                radius: RADIUS_CONTROL.into(),
+            },
+            shadow: theme.card_style().shadow,
+            snap: true,
+            ..container::Style::default()
+        });
+
+    mouse_area(card_surface)
+        .on_press(map_msg(ProjectsMessage::BeginDragTask(task.id.clone())))
+        .on_release(map_msg(ProjectsMessage::DropTask))
+        .on_right_press(map_msg(ProjectsMessage::OpenContextMenu(task.id.clone())))
+        .into()
+}
+
+fn task_radio_toggle<'a, Message: Clone + 'a>(
+    is_done: bool,
+    on_press: Message,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    button(if is_done {
+        container(icon_svg(
+            Icon::CheckCircle2,
+            16.0,
+            CategoryColor::Sage.solid(theme),
+        ))
+        .center_x(Length::Fixed(18.0))
+        .center_y(Length::Fixed(18.0))
+    } else {
+        container(text("").size(1))
+            .width(Length::Fixed(16.0))
+            .height(Length::Fixed(16.0))
+            .style(move |_| container::Style {
+                border: Border {
+                    color: Color {
+                        a: 0.45,
+                        ..theme.text_muted
+                    },
+                    width: 1.5,
+                    radius: RADIUS_PILL.into(),
+                },
+                ..container::Style::default()
+            })
+    })
+    .on_press(on_press)
+    .padding(0.0)
+    .width(Length::Fixed(20.0))
+    .height(Length::Fixed(20.0))
+    .style(|_, _| button::Style::default())
+    .into()
+}
+
+fn task_status_pill<'a, Message: Clone + 'a>(
+    status: TaskStatus,
+    on_press: Message,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    let (status_label, status_tint) = task_status_visual(status, theme);
+    button(
+        row![
+            color_dot(status_tint),
+            shaped_text(status_label, 11.0, FONT_SANS_SEMIBOLD, status_tint),
+        ]
+        .spacing(5.0)
+        .align_y(Alignment::Center),
+    )
+    .on_press(on_press)
+    .padding([3.0, 9.0])
+    .style(move |_, btn_status| button::Style {
+        background: Some(
+            Color {
+                a: if matches!(btn_status, button::Status::Hovered) {
+                    0.22
+                } else {
+                    0.13
+                },
+                ..status_tint
+            }
+            .into(),
+        ),
+        text_color: status_tint,
+        border: Border {
+            radius: RADIUS_PILL.into(),
+            ..Border::default()
+        },
+        ..button::Style::default()
+    })
+    .into()
+}
+
+fn view_tasks_calendar_grid<'a, Message: Clone + 'a>(
     state: &'a ProjectsState,
     today: NaiveDate,
     theme: EstudyTheme,
     map_msg: &impl Fn(ProjectsMessage) -> Message,
 ) -> Element<'a, Message> {
-    let header = row![
-        button(icon_svg(Icon::ChevronLeft, 13.0, theme.text_primary))
-            .on_press(map_msg(ProjectsMessage::ShiftCalendarMonth(-1)))
-            .padding(4.0)
-            .style(move |_, status| theme.ghost_button_style(status)),
-        container(
-            text(format!(
-                "{:02}/{}",
-                state.calendar_month, state.calendar_year
-            ))
-            .size(12)
-            .color(theme.text_primary),
-        )
-        .width(Length::Fill)
-        .align_x(Alignment::Center),
-        button(icon_svg(Icon::ChevronRight, 13.0, theme.text_primary))
-            .on_press(map_msg(ProjectsMessage::ShiftCalendarMonth(1)))
-            .padding(4.0)
-            .style(move |_, status| theme.ghost_button_style(status)),
-    ]
-    .align_y(Alignment::Center);
+    let total_days = days_in_month(state.calendar_year, state.calendar_month);
+    let first = NaiveDate::from_ymd_opt(state.calendar_year, state.calendar_month, 1);
+    let offset = first.map_or(0, |d| d.weekday().num_days_from_sunday() as usize);
 
-    let first_day = NaiveDate::from_ymd_opt(state.calendar_year, state.calendar_month, 1);
-    let mut grid = column![].spacing(2.0);
-    if let Some(start) = first_day {
-        let offset = start.weekday().num_days_from_monday();
-        let days_in_month = count_days_in_month(state.calendar_year, state.calendar_month);
-        let mut cells: Vec<Option<NaiveDate>> = vec![None; offset as usize];
-        for day in 1..=days_in_month {
-            cells.push(NaiveDate::from_ymd_opt(
-                state.calendar_year,
-                state.calendar_month,
-                day,
-            ));
-        }
-
-        for week in cells.chunks(7) {
-            let mut week_row = row![].spacing(2.0);
-            for cell in week {
-                if let Some(date) = cell {
-                    let is_selected = *date == state.selected_day;
-                    let is_today = *date == today;
-                    let label_color = if is_selected {
-                        theme.on_accent
-                    } else if is_today {
-                        theme.accent
-                    } else {
-                        theme.text_primary
-                    };
-                    week_row = week_row.push(
-                        button(
-                            text(format!("{:02}", date.day()))
-                                .size(10)
-                                .color(label_color),
-                        )
-                        .on_press(map_msg(ProjectsMessage::SelectCalendarDay(*date)))
-                        .width(Length::Fixed(26.0))
-                        .padding([3.0, 2.0])
-                        .style(move |_, status| {
-                            if is_selected {
-                                theme.primary_button_style(status)
-                            } else {
-                                theme.ghost_button_style(status)
-                            }
-                        }),
-                    );
-                } else {
-                    week_row = week_row.push(container(text("")).width(Length::Fixed(26.0)));
-                }
-            }
-            grid = grid.push(week_row);
-        }
+    let mut cells: Vec<Option<NaiveDate>> = vec![None; offset];
+    for d in 1..=total_days {
+        cells.push(NaiveDate::from_ymd_opt(
+            state.calendar_year,
+            state.calendar_month,
+            d,
+        ));
     }
 
-    panel(column![header, grid].spacing(SPACE_2), theme).into()
+    let weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+    let mut header = row![].spacing(SPACE_2).width(Length::Fill);
+    for w in weekdays {
+        header = header.push(
+            container(shaped_text(
+                w,
+                FONT_SIZE_XS,
+                FONT_SANS_SEMIBOLD,
+                theme.text_muted,
+            ))
+            .center_x(Length::Fill)
+            .width(Length::FillPortion(1)),
+        );
+    }
+
+    let tasks = state.filtered_tasks();
+    let mut grid = column![header].spacing(SPACE_2);
+
+    for week in cells.chunks(7) {
+        let mut line = row![].spacing(SPACE_2).width(Length::Fill);
+        for slot in week {
+            line = line.push(view_calendar_task_cell(
+                *slot, &tasks, today, theme, map_msg,
+            ));
+        }
+        for _ in week.len()..7 {
+            line = line.push(
+                container(text(""))
+                    .height(Length::Fixed(108.0))
+                    .width(Length::FillPortion(1)),
+            );
+        }
+        grid = grid.push(line);
+    }
+
+    scrollable(grid).height(Length::Fill).into()
 }
 
-fn view_main_workspace<'a, Message: Clone + 'a>(
-    state: &'a ProjectsState,
-    theme: EstudyTheme,
-    map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
-) -> Element<'a, Message> {
-    let toolbar = view_top_toolbar(state, theme, map_msg.clone());
-    let events_and_tags = view_events_and_tags_strip(state, theme, &map_msg);
-
-    let quick_add = row![
-        text_input("Nova tarefa rápida...", &state.quick_task_title)
-            .on_input({
-                let map_msg = map_msg.clone();
-                move |val| map_msg(ProjectsMessage::QuickTaskTitleChanged(val))
-            })
-            .on_submit(map_msg(ProjectsMessage::CreateQuickTask))
-            .padding(SPACE_2)
-            .size(13)
-            .style(move |_, status| theme.soft_input_style(status)),
-        button(
-            row![
-                icon_svg(Icon::Plus, 14.0, theme.on_accent),
-                text("Adicionar").size(12).color(theme.on_accent),
-            ]
-            .spacing(SPACE_1)
-            .align_y(Alignment::Center),
-        )
-        .on_press(map_msg(ProjectsMessage::CreateQuickTask))
-        .padding([SPACE_2, SPACE_3])
-        .style(move |_, status| theme.pill_button_style(true, status)),
-    ]
-    .spacing(SPACE_2)
-    .align_y(Alignment::Center);
-
-    let board = match state.active_framework() {
-        ProjectFramework::Kanban => view_kanban_board(state, theme, &map_msg),
-        ProjectFramework::WeeklyTurns => view_weekly_turns_board(state, theme, &map_msg),
-        ProjectFramework::Milestones => view_milestones_board(state, theme, &map_msg),
-        ProjectFramework::Eisenhower => view_eisenhower_matrix(state, theme, &map_msg),
-        ProjectFramework::WeeklyFocus => view_weekly_focus_board(state, theme, &map_msg),
-    };
-
-    container(
-        column![toolbar, events_and_tags, quick_add, board]
-            .spacing(SPACE_3)
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .padding(SPACE_4)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
-}
-
-fn view_top_toolbar<'a, Message: Clone + 'a>(
-    state: &'a ProjectsState,
-    theme: EstudyTheme,
-    map_msg: impl Fn(ProjectsMessage) -> Message + 'a,
-) -> Element<'a, Message> {
-    const FRAMEWORKS: [(ProjectFramework, &str); 5] = [
-        (ProjectFramework::Kanban, "Kanban"),
-        (ProjectFramework::WeeklyTurns, "Semana"),
-        (ProjectFramework::Milestones, "Marcos"),
-        (ProjectFramework::Eisenhower, "Eisenhower"),
-        (ProjectFramework::WeeklyFocus, "Foco"),
-    ];
-
-    let (title, description) = state.active_project().map_or(
-        (
-            "Todos os Projetos",
-            "Visão consolidada de todas as iniciativas",
-        ),
-        |proj| (proj.title.as_str(), proj.description.as_str()),
-    );
-    let sidebar_msg = map_msg(ProjectsMessage::ToggleSidebar);
-    let fw_switch = segmented_switch(
-        &FRAMEWORKS,
-        state.active_framework(),
-        move |fw| map_msg(ProjectsMessage::SwitchFramework(fw)),
-        theme,
-    );
-
-    row![
-        button(icon_svg(Icon::PanelLeft, 15.0, theme.text_primary))
-            .on_press(sidebar_msg)
-            .padding(SPACE_2)
-            .style(move |_, status| theme.ghost_button_style(status)),
-        category_tile(Icon::FolderKanban, CategoryColor::Slate, 34.0, theme),
-        column![
-            text(title)
-                .size(22)
-                .font(FONT_SERIF_MEDIUM)
-                .color(theme.text_primary),
-            text(description).size(12).color(theme.text_muted),
-        ]
-        .spacing(1.0),
-        container(fw_switch)
-            .align_x(Alignment::End)
-            .width(Length::Fill),
-    ]
-    .spacing(SPACE_3)
-    .align_y(Alignment::Center)
-    .into()
-}
-
-fn view_events_and_tags_strip<'a, Message: Clone + 'a>(
-    state: &'a ProjectsState,
+fn view_calendar_task_cell<'a, Message: Clone + 'a>(
+    slot: Option<NaiveDate>,
+    tasks: &[&'a Task],
+    today: NaiveDate,
     theme: EstudyTheme,
     map_msg: &impl Fn(ProjectsMessage) -> Message,
 ) -> Element<'a, Message> {
-    let mut events_row =
-        row![section_header(Icon::Calendar, "Próximos eventos:", theme)].spacing(SPACE_2);
-    for ev in state.upcoming_events.iter().take(3) {
-        events_row = events_row.push(status_badge(
-            format!("{} · {}", ev.when_label, ev.title),
-            theme.accent,
-            theme,
-        ));
+    let Some(date) = slot else {
+        return empty_calendar_task_slot(theme);
+    };
+
+    let day_tasks: Vec<&Task> = tasks
+        .iter()
+        .copied()
+        .filter(|t| extract_task_date(t) == Some(date))
+        .collect();
+    let is_today = date == today;
+    let top = calendar_cell_top_bar(date, is_today, day_tasks.len(), theme);
+
+    let mut list = column![top].spacing(4.0);
+    for t in day_tasks.iter().take(3) {
+        let (_, tint) = task_status_visual(t.status, theme);
+        list = list.push(
+            row![
+                color_dot(tint),
+                shaped_text(
+                    truncate_str(&t.title, 20),
+                    FONT_SIZE_XS,
+                    FONT_SANS_MEDIUM,
+                    if t.status == TaskStatus::Done {
+                        theme.text_muted
+                    } else {
+                        theme.text_primary
+                    },
+                ),
+            ]
+            .spacing(4.0)
+            .align_y(Alignment::Center),
+        );
     }
 
-    let mut tags_row = row![icon_svg(Icon::Tag, 13.0, theme.text_muted)].spacing(SPACE_1);
-    let all_active = state.active_tag_filter.is_none();
-    tags_row = tags_row.push(pill_chip(
-        "Todas",
-        None,
-        None,
-        all_active,
-        map_msg(ProjectsMessage::ToggleTagFilter(None)),
-        theme,
-    ));
+    button(list)
+        .on_press(map_msg(ProjectsMessage::OpenDayPeek(date)))
+        .width(Length::FillPortion(1))
+        .height(Length::Fixed(108.0))
+        .padding(SPACE_2)
+        .style(move |_, status| button::Style {
+            background: Some(
+                if matches!(status, button::Status::Hovered) {
+                    theme.card_hover
+                } else {
+                    theme.card
+                }
+                .into(),
+            ),
+            text_color: theme.text_primary,
+            border: Border {
+                color: if is_today {
+                    CategoryColor::Terracotta.solid(theme)
+                } else {
+                    theme.border_subtle
+                },
+                width: if is_today { 1.5 } else { 1.0 },
+                radius: RADIUS_CONTROL.into(),
+            },
+            ..button::Style::default()
+        })
+        .into()
+}
 
-    for tag in state.available_tags() {
-        let active = state.active_tag_filter.as_deref() == Some(tag.as_str());
-        tags_row = tags_row.push(pill_chip(
-            format!("#{tag}"),
-            Some(theme.accent),
-            None,
-            active,
-            map_msg(ProjectsMessage::ToggleTagFilter(Some(tag))),
-            theme,
-        ));
+fn empty_calendar_task_slot<'a, Message: 'a>(theme: EstudyTheme) -> Element<'a, Message> {
+    container(text(""))
+        .height(Length::Fixed(108.0))
+        .width(Length::FillPortion(1))
+        .style(move |_| container::Style {
+            background: Some(
+                Color {
+                    a: 0.35,
+                    ..theme.surface_soft
+                }
+                .into(),
+            ),
+            border: Border {
+                color: theme.border_subtle,
+                width: 1.0,
+                radius: RADIUS_CONTROL.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn calendar_cell_top_bar<'a, Message: 'a>(
+    date: NaiveDate,
+    is_today: bool,
+    count: usize,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    let day_num: Element<'a, Message> = if is_today {
+        container(shaped_text(
+            format!("{}", date.day()),
+            FONT_SIZE_XS,
+            FONT_MONO,
+            theme.on_accent,
+        ))
+        .padding([2.0, 7.0])
+        .style(move |_| container::Style {
+            background: Some(CategoryColor::Terracotta.solid(theme).into()),
+            border: Border {
+                radius: RADIUS_PILL.into(),
+                ..Border::default()
+            },
+            ..container::Style::default()
+        })
+        .into()
+    } else {
+        shaped_text(
+            format!("{}", date.day()),
+            FONT_SIZE_SM,
+            FONT_MONO,
+            theme.text_primary,
+        )
+        .into()
+    };
+
+    let mut top = row![day_num].align_y(Alignment::Center);
+    if count > 0 {
+        top = top.push(
+            container(
+                container(shaped_text(
+                    format!("{count}"),
+                    11.0,
+                    FONT_MONO,
+                    theme.on_accent,
+                ))
+                .padding([1.0, 6.0])
+                .style(move |_| container::Style {
+                    background: Some(theme.text_primary.into()),
+                    border: Border {
+                        radius: RADIUS_PILL.into(),
+                        ..Border::default()
+                    },
+                    ..container::Style::default()
+                }),
+            )
+            .align_x(Alignment::End)
+            .width(Length::Fill),
+        );
     }
-
-    soft_surface(
-        column![events_row, hairline_divider(theme), tags_row].spacing(SPACE_2),
-        theme,
-    )
-    .into()
+    top.into()
 }
 
 fn view_kanban_board<'a, Message: Clone + 'a>(
@@ -372,194 +1003,119 @@ fn view_kanban_board<'a, Message: Clone + 'a>(
     map_msg: &impl Fn(ProjectsMessage) -> Message,
 ) -> Element<'a, Message> {
     let tasks = state.filtered_tasks();
-    let mut columns_row = row![].spacing(SPACE_3).width(Length::Fill);
+    let mut columns_row = row![]
+        .spacing(SPACE_3)
+        .width(Length::Fill)
+        .height(Length::Fill);
 
     for status in TaskStatus::ALL {
         let col_tasks: Vec<&Task> = tasks
             .iter()
             .copied()
-            .filter(|task| task.status == status)
+            .filter(|t| t.status == status)
             .collect();
+        let target = DragTarget::KanbanStatus(status);
+        let is_hovered =
+            state.dragging_task_id.is_some() && state.hovered_drop_target == Some(target);
 
         let mut cards_col = column![].spacing(SPACE_2);
         for task in &col_tasks {
-            cards_col = cards_col.push(view_task_card(task, theme, map_msg));
+            cards_col = cards_col.push(view_task_card(state, task, theme, map_msg));
         }
 
-        let col_panel = panel(
+        let col_box = soft_surface(
             column![
                 row![
-                    text(status.label()).size(13).color(theme.text_primary),
-                    container(
-                        text(format!("{}", col_tasks.len()))
-                            .size(12)
-                            .color(theme.text_muted)
-                    )
+                    shaped_text(
+                        status.label(),
+                        FONT_SIZE_MD,
+                        FONT_SANS_SEMIBOLD,
+                        theme.text_primary,
+                    ),
+                    container(shaped_text(
+                        format!("{}", col_tasks.len()),
+                        FONT_SIZE_XS,
+                        FONT_MONO,
+                        theme.text_muted,
+                    ))
                     .align_x(Alignment::End)
                     .width(Length::Fill),
                 ]
                 .align_y(Alignment::Center),
+                hairline_divider(theme),
                 scrollable(cards_col).height(Length::Fill),
             ]
             .spacing(SPACE_2),
             theme,
         )
-        .width(Length::Fill)
-        .height(Length::Fill);
+        .padding(SPACE_3)
+        .width(Length::FillPortion(1))
+        .height(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(
+                if is_hovered {
+                    theme.accent_subtle
+                } else {
+                    theme.surface_soft
+                }
+                .into(),
+            ),
+            border: Border {
+                color: if is_hovered {
+                    theme.accent
+                } else {
+                    theme.border_subtle
+                },
+                width: if is_hovered { 1.5 } else { 1.0 },
+                radius: RADIUS_CARD.into(),
+            },
+            ..container::Style::default()
+        });
 
-        columns_row = columns_row.push(col_panel);
+        columns_row = columns_row.push(
+            mouse_area(col_box)
+                .on_enter(map_msg(ProjectsMessage::HoverDropTarget(Some(target))))
+                .on_release(map_msg(ProjectsMessage::DropTask)),
+        );
     }
 
     columns_row.into()
 }
 
-fn view_weekly_turns_board<'a, Message: Clone + 'a>(
-    state: &'a ProjectsState,
-    theme: EstudyTheme,
-    map_msg: &impl Fn(ProjectsMessage) -> Message,
-) -> Element<'a, Message> {
-    let tasks = state.filtered_tasks();
-    let base_day = state.selected_day;
-    let mut days_row = row![].spacing(SPACE_3).width(Length::Fill);
-
-    for offset in 0..5_i64 {
-        let day = base_day + Duration::days(offset);
-        let date_prefix = day.format("%Y-%m-%d").to_string();
-        let day_tasks: Vec<&Task> = tasks
-            .iter()
-            .copied()
-            .filter(|task| {
-                let matches_date = task
-                    .start_at
-                    .as_deref()
-                    .or(task.due_at.as_deref())
-                    .is_some_and(|raw| raw.starts_with(&date_prefix));
-                matches_date || (offset == 0 && task.start_at.is_none() && task.due_at.is_none())
-            })
-            .collect();
-
-        let mut turns_col = column![].spacing(SPACE_2);
-        for turn in TaskTurn::ALL {
-            turns_col = turns_col.push(view_turn_section(day, turn, &day_tasks, theme, map_msg));
-        }
-
-        let header = row![
-            text(short_weekday_pt(day.weekday()))
-                .size(13)
-                .font(FONT_SANS_SEMIBOLD)
-                .color(theme.text_primary),
-            container(
-                text(format!("{:02}/{:02}", day.day(), day.month()))
-                    .size(11)
-                    .font(FONT_MONO)
-                    .color(if offset == 0 {
-                        theme.on_accent
-                    } else {
-                        theme.text_muted
-                    }),
-            )
-            .padding([2.0, 8.0])
-            .style(move |_| container::Style {
-                background: Some(
-                    if offset == 0 {
-                        theme.accent
-                    } else {
-                        theme.surface_soft
-                    }
-                    .into(),
-                ),
-                border: Border {
-                    radius: RADIUS_PILL.into(),
-                    ..Border::default()
-                },
-                ..container::Style::default()
-            }),
-        ]
-        .spacing(SPACE_2)
-        .align_y(Alignment::Center);
-
-        days_row = days_row.push(
-            panel(
-                column![
-                    header,
-                    hairline_divider(theme),
-                    scrollable(turns_col).height(Length::Fill),
-                ]
-                .spacing(SPACE_2),
-                theme,
-            )
-            .width(Length::Fill)
-            .height(Length::Fill),
-        );
+/// Ícone ilustrado colorido correspondente ao período do dia.
+#[must_use]
+pub const fn turn_illustrated_icon(turn: TaskTurn) -> IllustratedIcon {
+    match turn {
+        TaskTurn::Anytime => IllustratedIcon::TurnAnytime,
+        TaskTurn::Morning => IllustratedIcon::TurnMorning,
+        TaskTurn::Afternoon => IllustratedIcon::TurnAfternoon,
+        TaskTurn::Evening => IllustratedIcon::TurnEvening,
     }
-
-    days_row.into()
 }
 
-fn view_turn_section<'a, Message: Clone + 'a>(
-    day: NaiveDate,
-    turn: TaskTurn,
-    day_tasks: &[&'a Task],
-    theme: EstudyTheme,
-    map_msg: &impl Fn(ProjectsMessage) -> Message,
-) -> Element<'a, Message> {
-    let matching: Vec<&Task> = day_tasks
-        .iter()
-        .copied()
-        .filter(|task| {
-            classify_task_turn(
-                task.start_at.as_deref(),
-                task.due_at.as_deref(),
-                task.priority,
-            ) == turn
-        })
-        .collect();
-
-    let turn_color = match turn {
-        TaskTurn::Morning => CategoryColor::Ochre,
-        TaskTurn::Afternoon => CategoryColor::Sage,
-        TaskTurn::Evening => CategoryColor::Lavender,
-    };
-
-    let mut body = column![
-        row![
-            color_dot(turn_color.solid(theme)),
-            text(turn.label())
-                .size(11)
-                .font(FONT_SANS_SEMIBOLD)
-                .color(theme.text_muted),
-            container(
-                button(icon_svg(Icon::Plus, 12.0, theme.text_muted))
-                    .on_press(map_msg(ProjectsMessage::CreateQuickTaskInTurn {
-                        date: day,
-                        turn,
-                    }))
-                    .padding(3.0)
-                    .style(move |_, status| theme.ghost_button_style(status)),
-            )
-            .align_x(Alignment::End)
-            .width(Length::Fill),
-        ]
-        .spacing(6.0)
-        .align_y(Alignment::Center),
-    ]
-    .spacing(SPACE_1);
-
-    if matching.is_empty() {
-        body = body.push(text("Sem blocos").size(11).color(theme.text_muted));
-    } else {
-        for task in matching {
-            body = body.push(view_task_card(task, theme, map_msg));
-        }
+/// Ícone ilustrado colorido correspondente à prioridade da tarefa.
+#[must_use]
+pub const fn priority_illustrated_icon(priority: TaskPriority) -> IllustratedIcon {
+    match priority {
+        TaskPriority::Low => IllustratedIcon::PriorityLow,
+        TaskPriority::Medium => IllustratedIcon::PriorityMedium,
+        TaskPriority::High => IllustratedIcon::PriorityHigh,
+        TaskPriority::Urgent => IllustratedIcon::PriorityUrgent,
     }
-
-    soft_surface(body, theme)
-        .padding(SPACE_2)
-        .width(Length::Fill)
-        .into()
 }
 
-const fn short_weekday_pt(weekday: chrono::Weekday) -> &'static str {
+fn turn_label_color(turn: TaskTurn, theme: EstudyTheme) -> Color {
+    match turn {
+        TaskTurn::Anytime => theme.text_muted,
+        TaskTurn::Morning => CategoryColor::Ochre.solid(theme),
+        TaskTurn::Afternoon => CategoryColor::Terracotta.solid(theme),
+        TaskTurn::Evening => CategoryColor::Lavender.solid(theme),
+    }
+}
+
+/// Nome do dia da semana em português.
+#[must_use]
+pub const fn weekday_full_pt(weekday: chrono::Weekday) -> &'static str {
     match weekday {
         chrono::Weekday::Mon => "Segunda",
         chrono::Weekday::Tue => "Terça",
@@ -571,665 +1127,14 @@ const fn short_weekday_pt(weekday: chrono::Weekday) -> &'static str {
     }
 }
 
-fn view_milestones_board<'a, Message: Clone + 'a>(
-    state: &'a ProjectsState,
-    theme: EstudyTheme,
-    map_msg: &impl Fn(ProjectsMessage) -> Message,
-) -> Element<'a, Message> {
-    let tasks = state.filtered_tasks();
-    let active_proj_id = state.selected_project_id.as_ref();
-    let mut grouped: BTreeMap<String, Vec<&Task>> = BTreeMap::new();
-
-    for task in tasks {
-        let milestone = task
-            .project_links
-            .iter()
-            .find(|link| active_proj_id.is_none_or(|id| *id == link.project_id))
-            .and_then(|link| link.milestone_name.clone())
-            .unwrap_or_else(|| "Sem marco".to_string());
-        grouped.entry(milestone).or_default().push(task);
-    }
-
-    let mut list = column![].spacing(SPACE_3);
-    for (milestone, group) in grouped {
-        let done = group
-            .iter()
-            .filter(|task| task.status == TaskStatus::Done)
-            .count();
-        let total = group.len();
-        #[allow(clippy::cast_precision_loss)]
-        let ratio = if total == 0 {
-            0.0
-        } else {
-            done as f32 / total as f32
-        };
-
-        let mut cards = column![].spacing(SPACE_2);
-        for task in group {
-            cards = cards.push(view_task_card(task, theme, map_msg));
-        }
-
-        list = list.push(card(
-            column![
-                row![
-                    section_header(Icon::Layers, milestone, theme),
-                    container(
-                        text(format!("{done}/{total} concluídas"))
-                            .size(12)
-                            .color(theme.text_muted)
-                    )
-                    .align_x(Alignment::End)
-                    .width(Length::Fill),
-                ],
-                progress_track(ratio, theme.accent, theme),
-                cards,
-            ]
-            .spacing(SPACE_2),
-            theme,
-        ));
-    }
-
-    scrollable(list).height(Length::Fill).into()
-}
-
-fn view_eisenhower_matrix<'a, Message: Clone + 'a>(
-    state: &'a ProjectsState,
-    theme: EstudyTheme,
-    map_msg: &impl Fn(ProjectsMessage) -> Message,
-) -> Element<'a, Message> {
-    let tasks = state.filtered_tasks();
-    let mut rows = column![].spacing(SPACE_3).height(Length::Fill);
-
-    for pair in EisenhowerQuadrant::ALL.chunks(2) {
-        let mut row_line = row![].spacing(SPACE_3).height(Length::Fill);
-        for quadrant in pair {
-            let matching: Vec<&Task> = tasks
-                .iter()
-                .copied()
-                .filter(|task| {
-                    task.eisenhower_quadrant
-                        .unwrap_or(EisenhowerQuadrant::Schedule)
-                        == *quadrant
-                })
-                .collect();
-
-            let mut col_cards = column![].spacing(SPACE_2);
-            for task in matching {
-                col_cards = col_cards.push(view_task_card(task, theme, map_msg));
-            }
-
-            row_line = row_line.push(
-                panel(
-                    column![
-                        section_header(Icon::LayoutGrid, quadrant.label(), theme),
-                        scrollable(col_cards).height(Length::Fill),
-                    ]
-                    .spacing(SPACE_2),
-                    theme,
-                )
-                .width(Length::Fill)
-                .height(Length::Fill),
-            );
-        }
-        rows = rows.push(row_line);
-    }
-
-    rows.into()
-}
-
-fn view_weekly_focus_board<'a, Message: Clone + 'a>(
-    state: &'a ProjectsState,
-    theme: EstudyTheme,
-    map_msg: &impl Fn(ProjectsMessage) -> Message,
-) -> Element<'a, Message> {
-    let mut list = column![].spacing(SPACE_2);
-    for task in state.filtered_tasks() {
-        let selected = state.weekly_focus_ids.contains(&task.id);
-        let toggle_btn = button(
-            text(if selected { "Na semana" } else { "Selecionar" })
-                .size(11)
-                .color(if selected {
-                    theme.on_accent
-                } else {
-                    theme.text_primary
-                }),
-        )
-        .on_press(map_msg(ProjectsMessage::ToggleWeeklyFocus(task.id.clone())))
-        .padding([SPACE_1, SPACE_2])
-        .style(move |_, status| {
-            if selected {
-                theme.primary_button_style(status)
-            } else {
-                theme.ghost_button_style(status)
-            }
-        });
-
-        list = list.push(card(
-            row![
-                toggle_btn,
-                button(text(&task.title).size(13).color(theme.text_primary))
-                    .on_press(map_msg(ProjectsMessage::OpenTaskDrawer(task.id.clone())))
-                    .width(Length::Fill)
-                    .style(move |_, status| theme.ghost_button_style(status)),
-                status_badge(task.status.label(), theme.accent, theme),
-            ]
-            .spacing(SPACE_2)
-            .align_y(Alignment::Center),
-            theme,
-        ));
-    }
-    scrollable(list).height(Length::Fill).into()
-}
-
-fn priority_category(priority: TaskPriority) -> CategoryColor {
-    match priority {
-        TaskPriority::Urgent => CategoryColor::Coral,
-        TaskPriority::High => CategoryColor::Terracotta,
-        TaskPriority::Medium => CategoryColor::Ochre,
-        TaskPriority::Low => CategoryColor::Slate,
-    }
-}
-
-fn view_task_card<'a, Message: Clone + 'a>(
-    task: &'a Task,
-    theme: EstudyTheme,
-    map_msg: &impl Fn(ProjectsMessage) -> Message,
-) -> Element<'a, Message> {
-    let category = priority_category(task.priority);
-    let (done, total) = task.checklist_progress();
-    let mut meta = row![category_pill(task.priority.label(), category, theme)]
-        .spacing(SPACE_1)
-        .align_y(Alignment::Center);
-    if total > 0 {
-        meta = meta.push(
-            text(format!("{done}/{total}"))
-                .size(11)
-                .font(FONT_MONO)
-                .color(theme.text_muted),
-        );
-    }
-    if task.pinned_focus {
-        meta = meta.push(icon_svg(Icon::Pin, 12.0, theme.warning));
-    }
-
-    let next_status = match task.status {
-        TaskStatus::Backlog => Some(TaskStatus::Todo),
-        TaskStatus::Todo => Some(TaskStatus::InProgress),
-        TaskStatus::InProgress => Some(TaskStatus::Done),
-        TaskStatus::Done => None,
-    };
-
-    let open_btn = button(
-        column![
-            text(&task.title)
-                .size(13)
-                .font(FONT_SANS_SEMIBOLD)
-                .color(theme.text_primary),
-            meta,
-        ]
-        .spacing(SPACE_1),
-    )
-    .on_press(map_msg(ProjectsMessage::OpenTaskDrawer(task.id.clone())))
-    .width(Length::Fill)
-    .padding(SPACE_2)
-    .style(move |_, status| theme.ghost_button_style(status));
-
-    let focus_btn = button(icon_svg(Icon::Play, 11.0, category.solid(theme)))
-        .on_press(map_msg(ProjectsMessage::StartFocusForTask(task.id.clone())))
-        .padding([4.0, 7.0])
-        .style(move |_, status| theme.subtle_button_style(status));
-
-    let mut actions = row![focus_btn].spacing(SPACE_1).align_y(Alignment::Center);
-    if let Some(target_status) = next_status {
-        actions = actions.push(
-            button(
-                row![
-                    icon_svg(Icon::ChevronRight, 12.0, theme.text_muted),
-                    text(target_status.label())
-                        .size(11)
-                        .font(FONT_SANS_MEDIUM)
-                        .color(theme.text_muted),
-                ]
-                .spacing(3.0)
-                .align_y(Alignment::Center),
-            )
-            .on_press(map_msg(ProjectsMessage::MoveTaskStatus(
-                task.id.clone(),
-                target_status,
-            )))
-            .padding([3.0, 6.0])
-            .style(move |_, status| theme.ghost_button_style(status)),
-        );
-    }
-
-    let bg = category.tint(theme);
-    let border_color = category.border(theme);
-    container(column![open_btn, actions].spacing(SPACE_1))
-        .padding(SPACE_2)
-        .width(Length::Fill)
-        .style(move |_| container::Style {
-            background: Some(bg.into()),
-            border: Border {
-                color: border_color,
-                width: 1.0,
-                radius: RADIUS_CONTROL.into(),
-            },
-            ..container::Style::default()
-        })
-        .into()
-}
-
-fn view_task_drawer<'a, Message: Clone + 'a>(
-    state: &'a ProjectsState,
-    drawer: &'a TaskDrawerState,
-    task: &'a Task,
-    theme: EstudyTheme,
-    map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
-) -> Element<'a, Message> {
-    let header = view_drawer_header(task, theme, map_msg.clone());
-    let schedule = view_drawer_schedule(state, task, theme, &map_msg);
-    let checklist = view_drawer_checklist(drawer, task, theme, map_msg.clone());
-    let markdown = view_drawer_markdown(drawer, task, theme, map_msg.clone());
-    let tags = view_drawer_tags(drawer, task, theme, map_msg);
-
-    let mut body = column![
-        header,
-        hairline_divider(theme),
-        schedule,
-        checklist,
-        markdown,
-        tags,
-    ]
-    .spacing(SPACE_3);
-    if let Some(notice) = &drawer.notice {
-        body = body.push(status_badge(notice, theme.warning, theme));
-    }
-
-    floating_drawer(scrollable(body).height(Length::Fill), 440.0, theme)
-}
-
-fn view_drawer_header<'a, Message: Clone + 'a>(
-    task: &'a Task,
-    theme: EstudyTheme,
-    map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
-) -> Element<'a, Message> {
-    let focus_btn = button(
-        row![
-            icon_svg(Icon::Play, 12.0, theme.on_accent),
-            text("Focar")
-                .size(12)
-                .font(FONT_SANS_MEDIUM)
-                .color(theme.on_accent),
-        ]
-        .spacing(4.0)
-        .align_y(Alignment::Center),
-    )
-    .on_press(map_msg(ProjectsMessage::StartFocusForTask(task.id.clone())))
-    .padding([SPACE_1, SPACE_2])
-    .style(move |_, status| theme.pill_button_style(true, status));
-
-    let pin_btn = button(
-        row![
-            icon_svg(
-                Icon::Pin,
-                14.0,
-                if task.pinned_focus {
-                    theme.on_accent
-                } else {
-                    theme.text_primary
-                },
-            ),
-            text(if task.pinned_focus {
-                "Em foco"
-            } else {
-                "Fixar"
-            })
-            .size(12)
-            .color(if task.pinned_focus {
-                theme.on_accent
-            } else {
-                theme.text_primary
-            }),
-        ]
-        .spacing(SPACE_1)
-        .align_y(Alignment::Center),
-    )
-    .on_press(map_msg(ProjectsMessage::DrawerToggleFocusPin))
-    .padding([SPACE_1, SPACE_2])
-    .style(move |_, status| {
-        if task.pinned_focus {
-            theme.primary_button_style(status)
-        } else {
-            theme.ghost_button_style(status)
-        }
-    });
-
-    let close_btn = button(icon_svg(Icon::X, 15.0, theme.text_muted))
-        .on_press(map_msg(ProjectsMessage::CloseTaskDrawer))
-        .padding(4.0)
-        .style(move |_, status| theme.ghost_button_style(status));
-
-    let title_input = text_input("Título da tarefa", &task.title)
-        .on_input(move |val| map_msg(ProjectsMessage::DrawerTitleChanged(val)))
-        .padding(SPACE_2)
-        .size(16)
-        .style(move |_, status| theme.soft_input_style(status));
-
-    column![
-        row![
-            status_badge(task.status.label(), theme.accent, theme),
-            container(row![focus_btn, pin_btn, close_btn].spacing(SPACE_1))
-                .align_x(Alignment::End)
-                .width(Length::Fill),
-        ]
-        .align_y(Alignment::Center),
-        title_input,
-    ]
-    .spacing(SPACE_2)
-    .into()
-}
-
-fn view_drawer_schedule<'a, Message: Clone + 'a>(
-    state: &'a ProjectsState,
-    task: &'a Task,
-    theme: EstudyTheme,
-    map_msg: &impl Fn(ProjectsMessage) -> Message,
-) -> Element<'a, Message> {
-    let mut proj_row = row![].spacing(SPACE_1);
-    for proj in &state.projects {
-        let linked = task
-            .project_links
-            .iter()
-            .any(|link| link.project_id == proj.id);
-        proj_row = proj_row.push(
-            button(text(&proj.title).size(11).color(if linked {
-                theme.on_accent
-            } else {
-                theme.text_primary
-            }))
-            .on_press(map_msg(ProjectsMessage::DrawerToggleProjectLink(
-                proj.id.clone(),
-            )))
-            .padding([3.0, 8.0])
-            .style(move |_, status| {
-                if linked {
-                    theme.primary_button_style(status)
-                } else {
-                    theme.ghost_button_style(status)
-                }
-            }),
-        );
-    }
-
-    let mut prio_row = row![].spacing(SPACE_1);
-    for prio in TaskPriority::ALL {
-        let active = task.priority == prio;
-        prio_row = prio_row.push(
-            button(text(prio.label()).size(11).color(if active {
-                theme.on_accent
-            } else {
-                theme.text_primary
-            }))
-            .on_press(map_msg(ProjectsMessage::DrawerPriorityChanged(prio)))
-            .padding([3.0, 8.0])
-            .style(move |_, status| {
-                if active {
-                    theme.primary_button_style(status)
-                } else {
-                    theme.ghost_button_style(status)
-                }
-            }),
-        );
-    }
-
-    let dates = text(format!(
-        "Início: {} · Prazo: {} · Recorrência: {}",
-        task.start_at.as_deref().unwrap_or("—"),
-        task.due_at.as_deref().unwrap_or("—"),
-        task.recurrence.as_deref().unwrap_or("única"),
-    ))
-    .size(11)
-    .color(theme.text_muted);
-
-    panel(
-        column![
-            text("Projetos vinculados:")
-                .size(11)
-                .color(theme.text_muted),
-            proj_row,
-            text("Prioridade:").size(11).color(theme.text_muted),
-            prio_row,
-            dates,
-        ]
-        .spacing(SPACE_2),
-        theme,
-    )
-    .into()
-}
-
-fn view_drawer_checklist<'a, Message: Clone + 'a>(
-    drawer: &'a TaskDrawerState,
-    task: &'a Task,
-    theme: EstudyTheme,
-    map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
-) -> Element<'a, Message> {
-    let (done, total) = task.checklist_progress();
-    let header = section_header(
-        Icon::CheckSquare,
-        format!("Checklist ({done}/{total} · máx {MAX_TASK_CHECKLIST_ITEMS})"),
-        theme,
-    );
-
-    let mut items_col = column![].spacing(SPACE_1);
-    for item in &task.checklist {
-        let icon = if item.done {
-            Icon::CheckCircle2
-        } else {
-            Icon::CheckSquare
-        };
-        let tint = if item.done {
-            theme.success
-        } else {
-            theme.text_muted
-        };
-        items_col = items_col.push(
-            row![
-                button(
-                    row![
-                        icon_svg(icon, 14.0, tint),
-                        text(&item.title).size(12).color(theme.text_primary),
-                    ]
-                    .spacing(SPACE_2)
-                    .align_y(Alignment::Center),
-                )
-                .on_press(map_msg(ProjectsMessage::DrawerToggleChecklistItem(
-                    item.id.clone()
-                )))
-                .width(Length::Fill)
-                .style(move |_, status| theme.ghost_button_style(status)),
-                button(icon_svg(Icon::Trash2, 13.0, theme.text_muted))
-                    .on_press(map_msg(ProjectsMessage::DrawerRemoveChecklistItem(
-                        item.id.clone()
-                    )))
-                    .padding(4.0)
-                    .style(move |_, status| theme.ghost_button_style(status)),
-            ]
-            .spacing(SPACE_1)
-            .align_y(Alignment::Center),
-        );
-    }
-
-    let input_row = row![
-        text_input("Novo item da checklist...", &drawer.new_checklist_title)
-            .on_input({
-                let map_msg = map_msg.clone();
-                move |val| map_msg(ProjectsMessage::DrawerChecklistInputChanged(val))
-            })
-            .on_submit(map_msg(ProjectsMessage::DrawerAddChecklistItem))
-            .padding(SPACE_1)
-            .size(12),
-        button(icon_svg(Icon::Plus, 14.0, theme.on_accent))
-            .on_press(map_msg(ProjectsMessage::DrawerAddChecklistItem))
-            .padding(SPACE_1)
-            .style(move |_, status| theme.primary_button_style(status)),
-    ]
-    .spacing(SPACE_1);
-
-    panel(
-        column![header, items_col, input_row].spacing(SPACE_2),
-        theme,
-    )
-    .into()
-}
-
-fn view_drawer_markdown<'a, Message: Clone + 'a>(
-    drawer: &'a TaskDrawerState,
-    task: &'a Task,
-    theme: EstudyTheme,
-    map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
-) -> Element<'a, Message> {
-    const TABS: [(DescriptionTab, &str); 2] = [
-        (DescriptionTab::Write, "Escrever"),
-        (DescriptionTab::Preview, "Visualizar"),
-    ];
-    let tabs = segmented_switch(
-        &TABS,
-        drawer.description_tab,
-        {
-            let map_msg = map_msg.clone();
-            move |tab| map_msg(ProjectsMessage::SetDescriptionTab(tab))
-        },
-        theme,
-    );
-
-    let body: Element<'a, Message> = match drawer.description_tab {
-        DescriptionTab::Write => text_input("Descrição em Markdown...", &task.description_md)
-            .on_input(move |val| map_msg(ProjectsMessage::DrawerDescriptionChanged(val)))
-            .padding(SPACE_2)
-            .size(12)
-            .style(move |_, status| theme.soft_input_style(status))
-            .into(),
-        DescriptionTab::Preview => render_markdown_preview(&task.description_md, theme),
-    };
-
-    panel(
-        column![
-            row![
-                section_header(Icon::Code2, "Descrição", theme),
-                container(tabs).align_x(Alignment::End).width(Length::Fill)
-            ],
-            body,
-        ]
-        .spacing(SPACE_2),
-        theme,
-    )
-    .into()
-}
-
-fn view_drawer_tags<'a, Message: Clone + 'a>(
-    drawer: &'a TaskDrawerState,
-    task: &'a Task,
-    theme: EstudyTheme,
-    map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
-) -> Element<'a, Message> {
-    let mut tags_row = row![].spacing(SPACE_1);
-    for tag in &task.tags {
-        tags_row = tags_row.push(
-            button(text(format!("#{tag} ×")).size(11).color(theme.accent))
-                .on_press(map_msg(ProjectsMessage::DrawerRemoveTag(tag.clone())))
-                .padding([3.0, 8.0])
-                .style(move |_, status| theme.ghost_button_style(status)),
-        );
-    }
-
-    let add_row = row![
-        text_input("Adicionar tag...", &drawer.new_tag_name)
-            .on_input({
-                let map_msg = map_msg.clone();
-                move |val| map_msg(ProjectsMessage::DrawerTagInputChanged(val))
-            })
-            .on_submit(map_msg(ProjectsMessage::DrawerAddTag))
-            .padding(SPACE_1)
-            .size(12),
-        button(icon_svg(Icon::Plus, 13.0, theme.on_accent))
-            .on_press(map_msg(ProjectsMessage::DrawerAddTag))
-            .padding(SPACE_1)
-            .style(move |_, status| theme.primary_button_style(status)),
-    ]
-    .spacing(SPACE_1);
-
-    panel(
-        column![section_header(Icon::Tag, "Tags", theme), tags_row, add_row,].spacing(SPACE_2),
-        theme,
-    )
-    .into()
-}
-
-fn render_markdown_preview<'a, Message: 'a>(
-    source: &'a str,
-    theme: EstudyTheme,
-) -> Element<'a, Message> {
-    if source.trim().is_empty() {
-        return text("Sem descrição adicionada.")
-            .size(12)
-            .color(theme.text_muted)
-            .into();
-    }
-
-    let mut col = column![].spacing(SPACE_1);
-    for raw_line in source.lines() {
-        let line = raw_line.trim();
-        if let Some(heading) = line.strip_prefix("# ") {
-            col = col.push(text(heading).size(15).color(theme.text_primary));
-        } else if let Some(subheading) = line.strip_prefix("## ") {
-            col = col.push(text(subheading).size(14).color(theme.accent));
-        } else if let Some(bullet) = line.strip_prefix("- ") {
-            col = col.push(
-                text(format!("• {bullet}"))
-                    .size(12)
-                    .color(theme.text_primary),
-            );
-        } else if !line.is_empty() {
-            col = col.push(text(line).size(12).color(theme.text_primary));
-        }
-    }
-    col.into()
-}
-
-fn sidebar_project_btn<'a, Message: Clone + 'a>(
-    label: &'a str,
-    active: bool,
-    on_press: Message,
-    theme: EstudyTheme,
-) -> Element<'a, Message> {
-    button(text(label).size(12).color(if active {
-        theme.on_accent
+fn truncate_str(raw: &str, max_chars: usize) -> String {
+    if raw.chars().count() <= max_chars {
+        raw.to_string()
     } else {
-        theme.text_primary
-    }))
-    .on_press(on_press)
-    .width(Length::Fill)
-    .padding([SPACE_1, SPACE_2])
-    .style(move |_, status| {
-        if active {
-            theme.primary_button_style(status)
-        } else {
-            theme.ghost_button_style(status)
-        }
-    })
-    .into()
-}
-
-fn count_days_in_month(year: i32, month: u32) -> u32 {
-    let (next_year, next_month) = if month == 12 {
-        (year + 1, 1)
-    } else {
-        (year, month + 1)
-    };
-    let current = NaiveDate::from_ymd_opt(year, month, 1);
-    let next = NaiveDate::from_ymd_opt(next_year, next_month, 1);
-    match (current, next) {
-        (Some(start), Some(end)) => u32::try_from((end - start).num_days()).unwrap_or(30),
-        _ => 30,
+        let head: String = raw.chars().take(max_chars.saturating_sub(1)).collect();
+        format!("{head}…")
     }
 }
+
+#[allow(dead_code)]
+const _: f32 = SPACE_1;

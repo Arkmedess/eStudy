@@ -151,9 +151,11 @@ impl TaskStatus {
     }
 }
 
-/// Turno do dia usado na visão semanal por turnos (`Manhã`, `Tarde`, `Noite`).
+/// Turno do dia usado na visão semanal por turnos (`Qualquer hora`, `Manhã`, `Tarde`, `Noite`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TaskTurn {
+    /// Qualquer hora do dia (sem horário fixo).
+    Anytime,
     /// Manhã (`05:00`–`11:59`).
     Morning,
     /// Tarde (`12:00`–`17:59`).
@@ -163,23 +165,25 @@ pub enum TaskTurn {
 }
 
 impl TaskTurn {
-    /// Os 3 turnos em ordem cronológica.
-    pub const ALL: [Self; 3] = [Self::Morning, Self::Afternoon, Self::Evening];
+    /// Os 4 períodos em ordem visual.
+    pub const ALL: [Self; 4] = [Self::Anytime, Self::Morning, Self::Afternoon, Self::Evening];
 
     /// Rótulo legível em português.
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
+            Self::Anytime => "Qualquer hora",
             Self::Morning => "Manhã",
             Self::Afternoon => "Tarde",
             Self::Evening => "Noite",
         }
     }
 
-    /// Horário padrão sugerido ao criar tarefa rapidamente neste turno.
+    /// Horário padrão sugerido ao criar tarefa rapidamente neste turno (`""` = apenas data).
     #[must_use]
     pub const fn default_hour(self) -> &'static str {
         match self {
+            Self::Anytime => "",
             Self::Morning => "09:00",
             Self::Afternoon => "14:00",
             Self::Evening => "19:30",
@@ -194,15 +198,21 @@ pub fn classify_task_turn(
     due_at: Option<&str>,
     priority: TaskPriority,
 ) -> TaskTurn {
-    let raw = start_at.or(due_at);
-    if let Some(hour) = raw.and_then(extract_hour_hh) {
-        return if hour < 12 {
-            TaskTurn::Morning
-        } else if hour < 18 {
-            TaskTurn::Afternoon
-        } else {
-            TaskTurn::Evening
-        };
+    if let Some(raw) = start_at.or(due_at) {
+        if let Some(hour) = extract_hour_hh(raw) {
+            return if hour == 0 {
+                TaskTurn::Anytime
+            } else if hour < 12 {
+                TaskTurn::Morning
+            } else if hour < 18 {
+                TaskTurn::Afternoon
+            } else {
+                TaskTurn::Evening
+            };
+        }
+        if !raw.trim().is_empty() {
+            return TaskTurn::Anytime;
+        }
     }
 
     match priority {

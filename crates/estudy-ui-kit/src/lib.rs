@@ -8,11 +8,13 @@ pub mod theme;
 pub mod widgets;
 
 pub use fonts::{
-    FONT_MONO, FONT_MONO_MEDIUM, FONT_SANS, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD, FONT_SERIF,
-    FONT_SERIF_MEDIUM, embedded_fonts,
+    FONT_MONO, FONT_MONO_MEDIUM, FONT_SANS, FONT_SANS_BOLD, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD,
+    FONT_SERIF, FONT_SERIF_ITALIC, FONT_SERIF_MEDIUM, FONT_SIZE_2XL, FONT_SIZE_BASE,
+    FONT_SIZE_DISPLAY, FONT_SIZE_HERO_TIMER, FONT_SIZE_LG, FONT_SIZE_MD, FONT_SIZE_SM,
+    FONT_SIZE_TIMER, FONT_SIZE_XL, FONT_SIZE_XS, embedded_fonts,
 };
 pub use heatmap::{HeatmapData, HeatmapGrid};
-pub use icons::Icon;
+pub use icons::{Icon, IllustratedIcon};
 pub use sparkline::{SparklineCanvas, SparklineData};
 pub use theme::{
     BoardFrameStyle, CategoryColor, CosmeticLoadout, EstudyTheme, RADIUS_CARD, RADIUS_CHIP,
