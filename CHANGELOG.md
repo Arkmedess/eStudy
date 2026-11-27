@@ -8,6 +8,19 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
+## [0.6.2] - 2026-11-26
+
+### Adicionado
+- **Fontes Estáticas OFL + `Shaping::Advanced`** (`crates/estudy-ui-kit/src/fonts.rs`): embutimento de 9 arquivos TrueType estáticos (`Newsreader 16pt` Regular/Medium/Italic real, `DM Sans` Regular/Medium/SemiBold/Bold e `JetBrains Mono` Regular/Medium) com modelagem HarfRust ativa em todos os componentes para eliminar colisão de letras e serrilhado.
+- **Iconografia Ilustrada Colorida (`IllustratedIcon`) + Monoline `1.75px`** (`crates/estudy-ui-kit/src/icons.rs`): 17 ícones vetoriais multi-cor sem filtro monocromático para módulos da barra lateral, períodos do dia, prioridades e medalhão do gatinho **Mochi**, acompanhados de 87 ícones de linha limpa (`1.75px`) em tamanhos inteiros.
+- **Manipulação Direta e Modais Previsíveis em `Tarefas`** (`crates/estudy-ui/src/features/projects/`): abertura direta em `[ Semana | Calendário | Kanban ]`, bandeja `SEM DIA`, período `Qualquer hora`, conclusão `○ -> ✓` e giro de status em 1 clique no cartão, Drag & Drop entre dias e períodos, menu de contexto no cursor (botão direito), modal de tarefa multi-linha real (`text_editor`), Card do Dia no calendário e exclusão lógica persistida no SQLite (`soft_delete_task`).
+
+### Alterado
+- **Motor Gráfico GPU (`wgpu`) por Padrão**: ativado em `estudy-desktop` e `estudy-preview` com correção gama linear nas fontes, sombras suaves em cartões/modais e `RssAnon` medido em `~30.1 MiB` (mantendo a feature `cpu` opcional).
+- **Moldura Limpa e Composição Editorial das Rotas** (`crates/estudy-ui/`): remoção da Topbar global e da segunda barra lateral contextual; nova barra lateral única (`216px` expandida ou `58px` apenas com ícones), pílula flutuante de Pomodoro somente quando o timer está rodando, `Home` reestruturada (Hero com `+ações`, 3 cartões contrastantes com Mini-Calendário e 3 colunas acionáveis), `Hábitos` com `+ Novo hábito` integrado, `Segundo Cérebro` em grade ampla com modal multi-linha e `Agenda` enxuta em `[ Calendário | Lista ]` — mantendo intactas todas as cores do tema `Oliva Orgânico`.
+
+---
+
 ## [0.6.1] - 2026-11-25
 
 ### Adicionado
@@ -136,7 +149,8 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
-[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/Arkmedess/eStudy/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Arkmedess/eStudy/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Arkmedess/eStudy/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Arkmedess/eStudy/compare/v0.4.1...v0.5.0

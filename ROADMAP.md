@@ -42,6 +42,11 @@ Plano incremental de entregas do **eStudy**. Cada marco entrega um conjunto func
   - Suíte de testes de usabilidade (`usability_flows.rs` com 7 jornadas) e migração SQLite v2 (`0002_habits_and_weekly_turns.sql`) persistindo Hábitos, Segundo Cérebro (`FTS5`) e `weekly_turns`.
   - Especificação completa em [docs/ux-architecture-0.6.1.md](./docs/ux-architecture-0.6.1.md).
 
+- **v0.6.2 — Redesign Editorial, Fontes Estáticas, Ícones Coloridos, `wgpu` Padrão e Interação Direta** *(Concluído)*
+  - 9 fontes TrueType estáticas OFL (`Newsreader 16pt` Regular/Medium/Italic real, `DM Sans` Regular/Medium/SemiBold/Bold e `JetBrains Mono` Regular/Medium) com `Shaping::Advanced`, 17 ícones vetoriais multi-cor (`IllustratedIcon` + medalhão do Mochi) e traços limpos de `1.75px`.
+  - Aceleração GPU `wgpu` (`sRGB`) por padrão (`RssAnon ~30,1 MiB`, mantendo feature `cpu` opcional), remoção da Topbar global e da segunda barra lateral contextual, e pílula flutuante de Pomodoro visível só com o timer rodando.
+  - `Tarefas` direto em `[ Semana | Calendário | Kanban ]` com bandeja `SEM DIA`, período `Qualquer hora`, check e giro de status em 1 clique no cartão, Drag & Drop entre dias/períodos, menu de contexto no cursor, modais multi-linha reais (`text_editor`) em Tarefas e Segundo Cérebro, Card do Dia e `soft_delete_task` no SQLite.
+
 - **v0.7.0 — Módulo de Estudos Completo e Estante de Leituras**
   - Ciclo contínuo de matérias com "Matéria da Vez", revisões espaçadas (`1/7/14/30/60d` e FSRS), flashcards *Active Recall*, Caderno de Erros e gráficos analíticos em `Canvas`.
   - Estante de Leituras com prateleiras customizáveis, sorteio *TBR Picker*, *Reader Companion* (`+5`/`+10` páginas, citações, estrelas) e capas da Open Library.
