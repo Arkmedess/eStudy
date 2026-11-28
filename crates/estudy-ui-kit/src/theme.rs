@@ -1,7 +1,8 @@
 //! Tokens visuais, os 5 presets WCAG 2.2 AA e slots cosméticos do eStudy.
 
-use iced::widget::{button, container, text_input};
-use iced::{Border, Color, Shadow, Vector};
+use iced::gradient::Linear;
+use iced::widget::{button, container, scrollable, slider, text_input};
+use iced::{Background, Border, Color, Gradient, Radians, Shadow, Vector};
 
 /// Unidade base de espaçamento (`4px`).
 pub const SPACE_1: f32 = 4.0;
@@ -851,6 +852,149 @@ impl EstudyTheme {
             },
             shadow: Shadow::default(),
             snap: true,
+        }
+    }
+
+    /// Estilo de cartão clicável com elevação progressiva no hover e feedback tátil ao pressionar.
+    #[must_use]
+    pub fn interactive_card_style(&self, status: button::Status) -> button::Style {
+        let hover_shadow = Shadow {
+            offset: Vector::new(0.0, 5.0),
+            blur_radius: 16.0,
+            color: Color {
+                a: match self.mode {
+                    ThemeMode::Light => 0.09,
+                    ThemeMode::Dark => 0.34,
+                },
+                ..self.card_shadow().color
+            },
+        };
+        let pressed_shadow = Shadow {
+            offset: Vector::new(0.0, 1.0),
+            blur_radius: 4.0,
+            ..self.card_shadow()
+        };
+
+        let (bg, border_color, shadow) = match status {
+            button::Status::Hovered => (
+                self.card_hover,
+                Color {
+                    a: 0.28,
+                    ..self.accent
+                },
+                hover_shadow,
+            ),
+            button::Status::Pressed => (self.accent_subtle, self.accent, pressed_shadow),
+            _ => (self.card, self.border_subtle, self.card_shadow()),
+        };
+
+        button::Style {
+            background: Some(bg.into()),
+            text_color: self.text_primary,
+            border: Border {
+                color: border_color,
+                width: 1.0,
+                radius: RADIUS_CARD.into(),
+            },
+            shadow,
+            snap: true,
+        }
+    }
+
+    /// Estilo de cartão com gradiente linear suave entre duas cores e texto de alto contraste.
+    #[must_use]
+    pub fn gradient_card_style(
+        &self,
+        start: Color,
+        end: Color,
+        angle_radians: f32,
+        text_color: Color,
+    ) -> container::Style {
+        let linear = Linear::new(Radians(angle_radians))
+            .add_stop(0.0, start)
+            .add_stop(1.0, end);
+        container::Style {
+            background: Some(Background::Gradient(Gradient::Linear(linear))),
+            text_color: Some(text_color),
+            border: Border {
+                color: self.border_subtle,
+                width: 1.0,
+                radius: RADIUS_CARD.into(),
+            },
+            shadow: self.card_shadow(),
+            snap: true,
+        }
+    }
+
+    /// Estilo harmonizado ao tema para controles deslizantes (`slider`), substituindo o azul padrão.
+    #[must_use]
+    pub fn slider_style(&self, status: slider::Status) -> slider::Style {
+        let (handle_bg, handle_radius, border_color) = match status {
+            slider::Status::Hovered => (self.card_hover, 9.0, self.accent),
+            slider::Status::Dragged => (self.accent, 9.5, self.accent),
+            slider::Status::Active => (self.card, 8.0, self.accent),
+        };
+
+        slider::Style {
+            rail: slider::Rail {
+                backgrounds: (self.accent.into(), self.surface_soft.into()),
+                width: 5.0,
+                border: Border {
+                    radius: RADIUS_PILL.into(),
+                    ..Border::default()
+                },
+            },
+            handle: slider::Handle {
+                shape: slider::HandleShape::Circle {
+                    radius: handle_radius,
+                },
+                background: handle_bg.into(),
+                border_width: 2.0,
+                border_color,
+            },
+        }
+    }
+
+    /// Estilo sutil e discreto para barras de rolagem que combina com os presets do eStudy.
+    #[must_use]
+    pub fn subtle_scrollbar_style(&self, status: scrollable::Status) -> scrollable::Style {
+        let is_active = matches!(
+            status,
+            scrollable::Status::Hovered { .. } | scrollable::Status::Dragged { .. }
+        );
+        let scroller_color = Color {
+            a: if is_active { 0.42 } else { 0.22 },
+            ..self.text_muted
+        };
+        let rail = scrollable::Rail {
+            background: None,
+            border: Border {
+                radius: RADIUS_PILL.into(),
+                ..Border::default()
+            },
+            scroller: scrollable::Scroller {
+                background: scroller_color.into(),
+                border: Border {
+                    radius: RADIUS_PILL.into(),
+                    ..Border::default()
+                },
+            },
+        };
+        scrollable::Style {
+            container: container::Style::default(),
+            vertical_rail: rail,
+            horizontal_rail: rail,
+            gap: None,
+            auto_scroll: scrollable::AutoScroll {
+                background: self.card.into(),
+                border: Border {
+                    color: self.border_subtle,
+                    width: 1.0,
+                    radius: RADIUS_PILL.into(),
+                },
+                shadow: self.card_shadow(),
+                icon: self.text_primary,
+            },
         }
     }
 }

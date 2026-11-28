@@ -1,49 +1,55 @@
 # Design System — eStudy
 
-Documento oficial de interface, tokens visuais, tipografia estática, iconografia ilustrada e acessibilidade do **eStudy** (`Iced 0.14` + `wgpu` sRGB padrão).
+Documento oficial de interface, tokens visuais, tipografia estática, iconografia ilustrada e acessibilidade do **eStudy** (`Iced 0.14` com motor gráfico `wgpu` sRGB por padrão).
 
 ---
 
-## 1. Arquitetura Visual, Janela Limpa e Interatividade Direta
+## 1. Arquitetura Visual, Janela Limpa e Responsividade
 
-O eStudy segue uma estética editorial acolhedora e tátil: zero barras globais poluídas, zero segundas sidebars roubando largura útil e manipulação direta nos cartões antes de abrir qualquer janela modal.
+O eStudy segue uma estética editorial acolhedora e tátil: zero barras horizontais no topo, zero segunda coluna fixa roubando espaço de leitura e interação direta nos cartões antes de abrir qualquer janela modal. Todas as telas adaptam colunas e barras de filtro para monitores amplos (`1360×840`+) e janelas lado a lado (`950×960`).
 
-- **Sem Topbar global e sem 2ª sidebar:** o palco principal ocupa 100% da altura da janela com respiro amplo.
-- **Sidebar esquerda limpa (`216px` expandida $\leftrightarrow$ `58px` em trilho de ícones, `Ctrl+B`):**
-  - *Modo expandido (`216px`):* marca nominal **`e`***`Study`* (`Newsreader Italic` + `Newsreader Medium`), gatilho discreto de busca (`Buscar... Ctrl+K`), seção `SEU ESPAÇO` com as 5 rotas ativas (*Início, Tarefas, Hábitos, Segundo cérebro, Agenda*), contadores discretos, medalhão ilustrado do gatinho **Mochi** com fala contextual e `Ajustes`.
-  - *Modo recolhido (`58px`):* apenas os ícones ilustrados coloridos (`22px`, sem micro-textos espremidos), medalhão do **Mochi** (clique abre balão flutuante ao lado) e `Ajustes`.
-- **Pílula flutuante de Pomodoro (sob demanda):** aparece no canto superior direito somente quando o cronômetro de foco está ativo (`● MM:SS · Tarefa [Pausar] [Expandir]`).
-- **Cabeçalho editorial unificado (`editorial_page_header`):** micro-breadcrumb (`ESTUDY / TAREFAS`) acima da linha dupla na mesma base — título em `Newsreader` (`34px`) ao lado do subtítulo em **`Newsreader Italic` real** (`18px`) — e no máximo **1 botão calmo de ação** alinhado à direita (`+ Nova tarefa`, `+ Novo compromisso`).
+- **Sidebar esquerda única (`216px` expandida $\leftrightarrow$ `58px` em trilho de ícones, `Ctrl+B`):**
+  - *Modo expandido (`216px`):* marca nominal **`e`***`Study`*, busca global (`Buscar... Ctrl+K`), seção `SEU ESPAÇO` com as 5 rotas ativas (*Início, Tarefas, Hábitos, Segundo cérebro, Agenda*) marcadas por filete lateral quando ativas, medalhão do gatinho **Mochi** com dicas contextuais, atalho `Timeline Hoje`, alternador claro/escuro e `Ajustes`.
+  - *Modo recolhido (`58px`):* apenas os ícones ilustrados coloridos (`22px`, sem textos espremidos) e medalhão do **Mochi** clicável com balão flutuante ao lado.
+- **Pílula flutuante de Pomodoro e toast `Desfazer`:**
+  - A pílula de foco (`● MM:SS · Em foco [Pausar] [Expandir]`) aparece no **canto inferior direito** somente quando o cronômetro está rodando fora da tela de Foco, sem encobrir cabeçalhos nem botões `+ Nova tarefa`.
+  - Exclusões de tarefas, hábitos, notas e compromissos exibem um aviso discreto no **canto inferior esquerdo** com botão **`Desfazer`** para restaurar na hora.
+- **Busca global (`Ctrl+K`):** além de ações rápidas, indexa projetos, tarefas, notas do Segundo Cérebro e hábitos ativos.
+- **Cabeçalho editorial unificado (`editorial_page_header`):** micro-breadcrumb acima da linha principal — título em `Newsreader` (`34px`) acompanhado do subtítulo em `Newsreader Italic` na mesma linha de base — com quebra automática de controles quando a janela fica estreita.
 - **Home (`Início`) em 3 faixas:**
-  1. *Hero acolhedor:* saudação em `Newsreader` (`38px`), resumo vivo do dia, paisagem vetorial sutil à direita e 4 pílulas rápidas (`+ Tarefa`, `+ Hábito`, `+ Compromisso`, `+ Nota`).
-  2. *Faixa de contraste tonal (`4fr / 5fr / 3fr`):* Card Terracota Quente (*Foco & Ritmo* com disparo rápido de 25m), Card Musgo Escuro (*Constância · 14 dias* com `SparklineCanvas` e métricas) e *Mini-Calendário* interativo do mês.
-  3. *Faixa acionável em 3 colunas:* *Tarefas* (check circular direto na Home), *Hábitos* (check colorido direto) e *Segundo cérebro*.
+  1. *Hero orgânico:* saudação personalizada em `Newsreader` (`36px`), resumo do dia, paisagem vetorial sem caixa dura em Modo Claro e Escuro, e pílulas de criação rápida (`+ Tarefa`, `+ Hábito`, `+ Compromisso`, `+ Nota`, `Timeline Hoje`).
+  2. *Faixa de contraste tonal (`4fr / 5fr / 3fr`, reorganizada em `950×960`):* cartão Terracota (*Foco & Ritmo* com disparo rápido), cartão Musgo (*Constância · 14 dias* com curva Bézier suave, preenchimento em gradiente e métricas em `JetBrains Mono`) e *Mini-Calendário* interativo com marcadores de dias ocupados e navegação direta para o dia.
+  3. *Faixa acionável alinhada pela base em 3 colunas:* *Tarefas* (check circular direto e abertura em 1 clique), *Hábitos* (check colorido direto) e *Segundo cérebro*.
 - **Tarefas (`[ Semana | Calendário | Kanban ]`):**
-  - Abre direto na visão **`Semana`**, com bandeja horizontal **`SEM DIA`** no topo e colunas diárias divididas nos 4 períodos (`Qualquer hora`, `Manhã`, `Tarde`, `Noite`).
-  - **Manipulação direta no cartão:** rádio circular `○ -> ✓` em 1 clique, pílula de status clicável (`Falta fazer -> Fazendo -> Concluído`), **Drag & Drop fluido** entre `SEM DIA`, dias e períodos, e **Menu de Contexto flutuante no cursor (clique direito)** (*Editar, Duplicar, Concluir, Iniciar foco, Status ▸, Prioridade ▸, Período ▸, Dia ▸, Excluir*).
-  - **Apenas 2 modais previsíveis:** Modal central **`Nova / Editar tarefa`** (com `text_editor` multi-linha real onde `Enter` pula linha, checklist interativa, status, prioridade, toggle *Tem dia*, atalhos *Hoje / Amanhã / +1 semana*, período e projeto) e **Card do Dia** ao clicar numa data do modo Calendário.
-- **Segundo Cérebro & Hábitos:** grade ampla de 4 colunas no Segundo Cérebro tendo o **1º cartão `+ Nova nota`** e leitura/edição multi-linha real (`text_editor`) em modal amplo; matriz semanal em Hábitos com `+ Novo hábito` integrado no rodapé do cartão.
+  - Abre na visão **`Semana`**, com bandeja horizontal **`SEM DIA`** no topo e grade rolável para os **7 dias completos (`248px` por coluna)** divididos nos 4 períodos (*Qualquer hora, Manhã, Tarde, Noite*), zonas tracejadas nos espaços vazios e selo `ONTEM` / `ATRASADA` em atrasos pendentes.
+  - **Manipulação direta e gestos sem conflito:** check circular `○ -> ✓` em 1 clique, pílula de status clicável, criação de projetos (`+ Projeto`), atalho `Esta semana` e arraste fluido que só ativa depois de `6px` de movimento para nunca atrapalhar o clique simples.
+  - **Menu de contexto flutuante (clique direito):** posicionado dentro dos limites da janela e com submenus que invertem para a esquerda perto da borda direita.
+  - **Kanban e Modais:** rolagem horizontal automática em telas estreitas no Kanban, modal `Nova / Editar tarefa` com editor multi-linha real (`Enter` quebra linha), setas rápidas `< >` na data, e modal `Card do Dia` ao clicar numa data no Calendário.
+- **Hábitos:** círculos limpos (`30px`, sem anel duplo), exclusão direta por linha com opção de desfazer, gatilho tracejado `+ Novo hábito` que expande formulário inline com 7 cores, barra de progresso mensal e calendário com cabeçalho `DOM..SÁB`.
+- **Segundo Cérebro:** grade adaptativa (4, 3 ou 2 colunas conforme a largura), primeiro cartão tracejado `+ Nova nota`, abas de tipo com contagem, filtros por `#tag` em pílulas pastel, data (`dd/mm`) em cada cartão e modal multi-linha com tags removíveis, campo de URL em links e preview formatado de títulos e listas.
+- **Agenda (`[ Calendário | Lista ]`):** cliques nos dias abrem o *Card do Dia* para consultar, editar ou excluir compromissos; aba **`Lista`** exibe toda a agenda do mês em sequência rolável com categoria e ações; legenda inferior filtra categorias por clique e o formulário inclui chave `Dia todo`.
+- **Modo Foco e Ajustes:** anel de progresso em `Canvas` com marcações horárias e brilho suave, cronômetro em `JetBrains Mono`, trilhas sonoras integradas com barra de volume estilizada, além de **Ajustes** com amostras visuais nos 5 temas e cartão **`Perfil & Ritmo de Foco`** para personalizar seu nome e o bloco Pomodoro padrão.
 
 ---
 
-## 2. Tipografia Estática (`Shaping::Advanced`), Iconografia em 2 Camadas e Geometria
+## 2. Tipografia Estática, Iconografia em 2 Camadas e Geometria
 
-- **Motor gráfico padrão (`wgpu`):** `estudy-desktop` e `estudy-preview` ativam `wgpu` por padrão para blending linear `sRGB` nítido nas fontes, sombras suaves e 60–144 FPS no Drag & Drop, mantendo a memória privada do processo (`RssAnon`) abaixo de `45 MiB` (e modo CPU opcional via `--no-default-features --features cpu`).
-- **9 fontes TrueType estáticas OFL embutidas (`crates/estudy-ui-kit/assets/fonts/`, zero eixo variável `fvar`):**
-  - `Newsreader 16pt` (`Regular`, `Medium`, **`Italic` real**) — títulos editoriais, subtítulos em itálico na mesma base e métricas principais.
-  - `DM Sans` (`Regular`, `Medium`, `SemiBold`, `Bold`) — interface limpa, cartões, filtros e textos de apoio.
-  - `JetBrains Mono` (`Regular`, `Medium`) — cronômetros, datas e contadores tabulares.
-  - Todos os helpers (`shaped_text`, `editorial_page_header`, `editorial_heading`) forçam `text::Shaping::Advanced` (HarfRust) para garantir kerning `GPOS` completo também em strings ASCII.
+- **Motor gráfico padrão (`wgpu`):** `estudy-desktop` e `estudy-preview` usam renderização acelerada por `wgpu` para suavidade nas fontes, gradientes e animações a 60–144 FPS, mantendo o consumo privado de memória (`RssAnon`, memória alocada só do processo) dentro do limite de `45 MiB` (também há modo por CPU com `--no-default-features --features cpu`).
+- **9 fontes TrueType estáticas embutidas (`crates/estudy-ui-kit/assets/fonts/`):**
+  - `Newsreader 16pt` (`Regular`, `Medium`, `Italic` real) — títulos editoriais, subtítulos em itálico na mesma linha de base e números grandes.
+  - `DM Sans` (`Regular`, `Medium`, `SemiBold`, `Bold`) — textos da interface, cartões, botões e formulários.
+  - `JetBrains Mono` (`Regular`, `Medium`) — relógios, datas e contadores tabulares alinhados.
+  - Todos os helpers de texto aplicam `Shaping::Advanced` (motor de modelagem tipográfica HarfRust) para kerning correto também em strings ASCII.
 - **Iconografia em duas camadas (`crates/estudy-ui-kit/src/icons.rs`):**
-  - **`IllustratedIcon` (17 SVGs multi-cor com cache estático):** ícones ilustrados com preenchimento e luz próprios (sem o filtro monocromático do `svg::Style.color`) para módulos da sidebar, períodos do dia (*Qualquer hora, Manhã, Tarde, Noite*), prioridades e medalhão do gatinho **Mochi**.
-  - **`Icon` (87 SVGs monoline `1.75px`):** traços limpos renderizados em tamanhos inteiros (`16px / 20px / 24px`) para ações internas de botões.
-- **Bordas hairline delicadas e sombras suaves:** `border_subtle` calibrada em `10%–11%` de opacidade e elevação orgânica suave nos cartões, modais e menus flutuantes.
+  - **`IllustratedIcon` (17 SVGs multi-cor em cache):** ícones com preenchimento próprio para módulos da sidebar, períodos do dia, prioridades e medalhão do **Mochi**. O helper `illustrated_svg_themed` adapta os traços escuros (`#2B241E`) para creme suave automaticamente no Modo Escuro.
+  - **`Icon` (89 SVGs monoline `1.75px`):** traços limpos em `14px / 16px / 20px / 24px`, incluindo `Check` e `Circle`.
+- **Primitivos visuais (`estudy-ui-kit`):** `radio_check_circle`, `dashed_frame`, `strikethrough_text`, `interactive_card_style`, `gradient_card_style`, `slider_style`, `subtle_scrollbar_style`, bordas suaves em `8%–16%` de opacidade e `SparklineCanvas` com curvas Bézier suaves e gradiente vertical.
 
 ---
 
 ## 3. Os 5 Presets de Tema (10 Variações Verificadas em WCAG 2.2 AA)
 
-As cores centrais do **Oliva Orgânico** (e dos demais 4 presets) são preservadas integralmente e validadas por testes automáticos de contraste mínimo `4.5:1` antes de cada release.
+As cores centrais do **Oliva Orgânico** e dos demais 4 presets preservam contraste mínimo `4.5:1` validado por testes automáticos antes de cada entrega.
 
 | Preset | Modo | `accent` | `on_accent` | `bg` | `panel` | `card` | Contraste `accent/panel` |
 | :--- | :---: | :--- | :--- | :--- | :--- | :--- | :---: |

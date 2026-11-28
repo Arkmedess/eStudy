@@ -1,5 +1,6 @@
 //! Estado e regras de interação da fatia Home Pessoal Viva.
 
+use chrono::NaiveDate;
 use estudy_ui_kit::{BoardFrameStyle, HeatmapData, Icon};
 
 /// Limite máximo de itens fixados em "Em foco".
@@ -193,6 +194,10 @@ pub enum HomeMessage {
     OpenTodayTimeline,
     /// Abre o Calendário diretamente na visão semanal.
     OpenCalendarWeek,
+    /// Abre a Agenda já focada e abrindo uma data específica selecionada no mini-calendário.
+    OpenCalendarDate(NaiveDate),
+    /// Inicia sessão Pomodoro com duração explícita em minutos.
+    StartFocusWithMinutes(u16),
     /// Inicia sessão Pomodoro a partir de um item "Em foco".
     StartFocusForPin(String),
     /// Abre popup rápido de visão geral de um projeto sem sair da Home.

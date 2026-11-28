@@ -1,7 +1,8 @@
 //! Gráfico de linha e área suave (*sparkline*) desenhado em `Canvas` leve com cache.
 
 use iced::mouse::Cursor;
-use iced::widget::canvas::{self, Canvas, Geometry, Path, Stroke};
+use iced::widget::canvas::gradient::Linear;
+use iced::widget::canvas::{self, Canvas, Geometry, LineCap, LineDash, LineJoin, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme};
 use std::cell::Cell;
 
@@ -124,78 +125,139 @@ impl<Message> canvas::Program<Message> for SparklineCanvas {
         }
 
         let geometry = state.cache.draw(renderer, bounds.size(), |frame| {
-            let width = bounds.width.max(1.0);
-            let height = bounds.height.max(1.0);
-            let pad_x = 4.0_f32;
-            let pad_y = 6.0_f32;
-            let plot_w = (width - pad_x * 2.0).max(1.0);
-            let plot_h = (height - pad_y * 2.0).max(1.0);
-
-            // Guias horizontais agrupadas em um único path.
-            let guides = Path::new(|builder| {
-                for step in [0.25_f32, 0.5, 0.75] {
-                    let y = pad_y + plot_h * step;
-                    builder.move_to(Point::new(pad_x, y));
-                    builder.line_to(Point::new(pad_x + plot_w, y));
-                }
-            });
-            frame.stroke(
-                &guides,
-                Stroke::default()
-                    .with_color(self.grid_color)
-                    .with_width(1.0),
-            );
-
-            let normalized = self.data.normalized_points();
-            if normalized.len() < 2 {
-                return;
-            }
-
-            let points: Vec<Point> = normalized
-                .iter()
-                .map(|&(nx, ny)| Point::new(pad_x + nx * plot_w, pad_y + ny * plot_h))
-                .collect();
-
-            let base_y = pad_y + plot_h;
-            let area = Path::new(|builder| {
-                builder.move_to(Point::new(points[0].x, base_y));
-                for &pt in &points {
-                    builder.line_to(pt);
-                }
-                if let Some(last) = points.last() {
-                    builder.line_to(Point::new(last.x, base_y));
-                }
-                builder.close();
-            });
-            frame.fill(&area, self.fill_color);
-
-            let line = Path::new(|builder| {
-                builder.move_to(points[0]);
-                for &pt in &points[1..] {
-                    builder.line_to(pt);
-                }
-            });
-            frame.stroke(
-                &line,
-                Stroke::default()
-                    .with_color(self.stroke_color)
-                    .with_width(2.0),
-            );
-
-            if let Some(&last) = points.last() {
-                frame.fill(
-                    &Path::circle(last, 5.0),
-                    Color {
-                        a: 0.25,
-                        ..self.stroke_color
-                    },
-                );
-                frame.fill(&Path::circle(last, 2.8), self.stroke_color);
-            }
+            self.draw_sparkline_frame(frame, bounds.width.max(1.0), bounds.height.max(1.0));
         });
 
         vec![geometry]
     }
+}
+
+impl SparklineCanvas {
+    fn draw_sparkline_frame(&self, frame: &mut canvas::Frame, width: f32, height: f32) {
+        let pad_x = 4.0_f32;
+        let pad_y = 6.0_f32;
+        let plot_w = (width - pad_x * 2.0).max(1.0);
+        let plot_h = (height - pad_y * 2.0).max(1.0);
+
+        let guides = Path::new(|builder| {
+            for step in [0.25_f32, 0.5, 0.75] {
+                let y = pad_y + plot_h * step;
+                builder.move_to(Point::new(pad_x, y));
+                builder.line_to(Point::new(pad_x + plot_w, y));
+            }
+        });
+        frame.stroke(
+            &guides,
+            Stroke {
+                line_dash: LineDash {
+                    segments: &[3.0, 5.0],
+                    offset: 0,
+                },
+                ..Stroke::default()
+                    .with_color(self.grid_color)
+                    .with_width(1.0)
+            },
+        );
+
+        let normalized = self.data.normalized_points();
+        if normalized.len() < 2 {
+            return;
+        }
+
+        let points: Vec<Point> = normalized
+            .iter()
+            .map(|&(nx, ny)| Point::new(pad_x + nx * plot_w, pad_y + ny * plot_h))
+            .collect();
+
+        let base_y = pad_y + plot_h;
+        let segments = smooth_cubic_segments(&points, pad_y, base_y);
+
+        let area = Path::new(|builder| {
+            builder.move_to(Point::new(points[0].x, base_y));
+            builder.line_to(points[0]);
+            for &(c1, c2, end) in &segments {
+                builder.bezier_curve_to(c1, c2, end);
+            }
+            if let Some(last) = points.last() {
+                builder.line_to(Point::new(last.x, base_y));
+            }
+            builder.close();
+        });
+        let top_alpha = self.fill_color.a.max(0.32);
+        let fill_grad = Linear::new(Point::new(0.0, pad_y), Point::new(0.0, base_y))
+            .add_stop(
+                0.0,
+                Color {
+                    a: top_alpha,
+                    ..self.stroke_color
+                },
+            )
+            .add_stop(
+                1.0,
+                Color {
+                    a: 0.0,
+                    ..self.stroke_color
+                },
+            );
+        frame.fill(&area, fill_grad);
+
+        let line = Path::new(|builder| {
+            builder.move_to(points[0]);
+            for &(c1, c2, end) in &segments {
+                builder.bezier_curve_to(c1, c2, end);
+            }
+        });
+        frame.stroke(
+            &line,
+            Stroke {
+                line_cap: LineCap::Round,
+                line_join: LineJoin::Round,
+                ..Stroke::default()
+                    .with_color(self.stroke_color)
+                    .with_width(2.2)
+            },
+        );
+
+        if let Some(&last) = points.last() {
+            frame.fill(
+                &Path::circle(last, 6.0),
+                Color {
+                    a: 0.24,
+                    ..self.stroke_color
+                },
+            );
+            frame.fill(&Path::circle(last, 3.2), self.stroke_color);
+        }
+    }
+}
+
+fn smooth_cubic_segments(points: &[Point], min_y: f32, max_y: f32) -> Vec<(Point, Point, Point)> {
+    const TENSION: f32 = 0.22;
+    let mut out = Vec::with_capacity(points.len().saturating_sub(1));
+    for i in 0..points.len().saturating_sub(1) {
+        let p0 = if i > 0 { points[i - 1] } else { points[0] };
+        let p1 = points[i];
+        let p2 = points[i + 1];
+        let p3 = if i + 2 < points.len() {
+            points[i + 2]
+        } else {
+            p2
+        };
+
+        let c1x = (p1.x + (p2.x - p0.x) * TENSION).clamp(p1.x, p2.x);
+        let c2x = (p2.x - (p3.x - p1.x) * TENSION).clamp(p1.x, p2.x);
+
+        let (c1y, c2y) = if (p2.y - p1.y).abs() <= f32::EPSILON {
+            (p1.y, p2.y)
+        } else {
+            (
+                (p1.y + (p2.y - p0.y) * TENSION).clamp(min_y, max_y),
+                (p2.y - (p3.y - p1.y) * TENSION).clamp(min_y, max_y),
+            )
+        };
+        out.push((Point::new(c1x, c1y), Point::new(c2x, c2y), p2));
+    }
+    out
 }
 
 fn hash_values(values: &[f32]) -> u64 {

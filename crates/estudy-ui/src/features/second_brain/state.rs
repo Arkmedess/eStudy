@@ -45,8 +45,14 @@ pub enum SecondBrainMessage {
     NewTagInputChanged(String),
     /// Adiciona tag à nota selecionada.
     AddTag,
+    /// Remove uma tag da nota selecionada.
+    RemoveTag(String),
+    /// Atualiza a URL de referência quando a nota é do tipo `Link`.
+    SourceUrlChanged(String),
     /// Remove a nota selecionada.
     DeleteNote(EntityId),
+    /// Restaura uma nota recém-excluída (Desfazer).
+    RestoreNote(KnowledgeNote),
 }
 
 /// Estado completo do Segundo Cérebro.
@@ -251,13 +257,36 @@ impl SecondBrainState {
             }
             SecondBrainMessage::NewTagInputChanged(val) => self.new_tag_input = val,
             SecondBrainMessage::AddTag => self.add_tag_to_selected(now_utc),
+            SecondBrainMessage::RemoveTag(tag) => {
+                self.mutate_selected_note(now_utc, |note| {
+                    note.tags
+                        .retain(|existing| !existing.eq_ignore_ascii_case(&tag));
+                });
+            }
+            SecondBrainMessage::SourceUrlChanged(raw) => {
+                self.mutate_selected_note(now_utc, |note| {
+                    let trimmed = raw.trim();
+                    note.source_url = (!trimmed.is_empty()).then(|| trimmed.to_string());
+                });
+            }
             SecondBrainMessage::DeleteNote(id) => {
                 self.notes.retain(|n| n.id != id);
                 self.dirty_note_ids.remove(&id);
                 self.deleted_note_ids.insert(id.clone());
                 if self.selected_note_id.as_ref() == Some(&id) {
+                    self.note_modal_open = false;
                     self.selected_note_id = self.notes.first().map(|n| n.id.clone());
                 }
+            }
+            SecondBrainMessage::RestoreNote(mut note) => {
+                let id = note.id.clone();
+                note.updated_at = now_utc;
+                self.deleted_note_ids.remove(&id);
+                if !self.notes.iter().any(|n| n.id == id) {
+                    self.notes.insert(0, note);
+                }
+                self.selected_note_id = Some(id.clone());
+                self.dirty_note_ids.insert(id);
             }
         }
     }

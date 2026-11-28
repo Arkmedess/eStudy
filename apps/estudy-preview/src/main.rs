@@ -368,7 +368,7 @@ fn view_icons_card<'a>(theme: EstudyTheme) -> Element<'a, PreviewMessage> {
 
     card(
         column![
-            section_header(Icon::LayoutGrid, "Catálogo de 87 Ícones SVG", theme),
+            section_header(Icon::LayoutGrid, "Catálogo de 89 Ícones SVG", theme),
             hairline_divider(theme),
             icons_grid,
         ]

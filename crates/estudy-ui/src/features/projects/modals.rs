@@ -1,10 +1,10 @@
-//! Modais previsíveis da tela de Tarefas: Modal `Nova/Editar Tarefa` (multi-linha real), `Card do Dia` e `Menu de Contexto` no cursor.
+//! Modais previsíveis da tela de Tarefas: `Nova/Editar Tarefa` (multi-linha real), `Novo Projeto`, `Card do Dia` e `Menu de Contexto`.
 
 use chrono::{Datelike, Duration, NaiveDate};
 use estudy_domain::{Task, TaskPriority, TaskStatus, TaskTurn, classify_task_turn};
 use estudy_ui_kit::widgets::{
-    color_dot, hairline_divider, icon_svg, illustrated_svg, modal_surface, shaped_text,
-    soft_surface,
+    color_dot, hairline_divider, icon_svg, illustrated_svg_themed, modal_surface,
+    radio_check_circle, shaped_text, soft_surface, strikethrough_text,
 };
 use estudy_ui_kit::{
     CategoryColor, EstudyTheme, FONT_MONO, FONT_SANS, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD,
@@ -19,7 +19,7 @@ use iced::{Alignment, Border, Color, Element, Length};
 
 use super::state::{
     ContextSubmenu, ProjectsMessage, ProjectsState, TaskContextMenu, TaskModalMode, TaskModalState,
-    extract_task_date,
+    extract_task_date, project_color_index,
 };
 use super::view::{priority_illustrated_icon, turn_illustrated_icon, weekday_full_pt};
 
@@ -68,7 +68,7 @@ pub fn view_task_modal<'a, Message: Clone + 'a>(
     let notes_box = text_editor(&modal.notes_content)
         .placeholder("Notas: escreva à vontade (o Enter pula linha)")
         .on_action(move |action| on_notes(ProjectsMessage::ModalNotesAction(action)))
-        .height(Length::Fixed(92.0))
+        .height(Length::Fixed(96.0))
         .padding(SPACE_3)
         .size(FONT_SIZE_BASE)
         .font(FONT_SANS)
@@ -126,7 +126,133 @@ pub fn view_task_modal<'a, Message: Clone + 'a>(
     ];
 
     body = body.push(footer);
-    modal_surface(scrollable(body).height(Length::Shrink), 520.0, theme)
+    modal_surface(scrollable(body).height(Length::Shrink), 540.0, theme)
+}
+
+/// Modal compacto para criar um novo projeto com nome e cor semântica.
+pub fn view_create_project_modal<'a, Message: Clone + 'a>(
+    state: &'a ProjectsState,
+    theme: EstudyTheme,
+    map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
+) -> Element<'a, Message> {
+    let close_btn = button(icon_svg(Icon::X, 16.0, theme.text_muted))
+        .on_press(map_msg(ProjectsMessage::ToggleCreateProjectModal))
+        .padding(SPACE_1)
+        .style(move |_, status| theme.subtle_button_style(status));
+
+    let header = row![
+        shaped_text(
+            "Novo projeto",
+            FONT_SIZE_LG,
+            FONT_SANS_SEMIBOLD,
+            theme.text_primary,
+        ),
+        container(close_btn)
+            .align_x(Alignment::End)
+            .width(Length::Fill),
+    ]
+    .align_y(Alignment::Center);
+
+    let on_title = map_msg.clone();
+    let title_input = text_input(
+        "Nome do projeto (ex.: Concurso, TCC)...",
+        &state.new_project_title,
+    )
+    .on_input(move |val| on_title(ProjectsMessage::NewProjectTitleChanged(val)))
+    .on_submit(map_msg(ProjectsMessage::CreateProject))
+    .padding([SPACE_2, SPACE_3])
+    .size(FONT_SIZE_MD)
+    .style(move |_, status| theme.soft_input_style(status));
+
+    let color_row = view_project_color_picker(state.new_project_color_idx, theme, &map_msg);
+
+    let footer = container(
+        row![
+            button(shaped_text(
+                "Cancelar",
+                FONT_SIZE_BASE,
+                FONT_SANS_MEDIUM,
+                theme.text_primary,
+            ))
+            .on_press(map_msg(ProjectsMessage::ToggleCreateProjectModal))
+            .padding([8.0, 14.0])
+            .style(move |_, status| theme.ghost_button_style(status)),
+            button(shaped_text(
+                "Criar projeto",
+                FONT_SIZE_BASE,
+                FONT_SANS_SEMIBOLD,
+                theme.on_accent,
+            ))
+            .on_press(map_msg(ProjectsMessage::CreateProject))
+            .padding([8.0, 18.0])
+            .style(move |_, status| theme.primary_button_style(status)),
+        ]
+        .spacing(SPACE_2),
+    )
+    .align_x(Alignment::End)
+    .width(Length::Fill);
+
+    modal_surface(
+        column![
+            header,
+            hairline_divider(theme),
+            title_input,
+            column![
+                shaped_text(
+                    "Cor do projeto",
+                    FONT_SIZE_SM,
+                    FONT_SANS_MEDIUM,
+                    theme.text_muted
+                ),
+                color_row,
+            ]
+            .spacing(SPACE_2),
+            footer,
+        ]
+        .spacing(SPACE_3),
+        420.0,
+        theme,
+    )
+}
+
+fn view_project_color_picker<'a, Message: Clone + 'a>(
+    selected_idx: usize,
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let mut color_row = row![].spacing(SPACE_2).align_y(Alignment::Center);
+    for (idx, cat) in CategoryColor::ALL.iter().enumerate() {
+        let selected = selected_idx == idx;
+        let solid = cat.solid(theme);
+        color_row = color_row.push(
+            button(if selected {
+                icon_svg(Icon::Check, 14.0, theme.on_accent)
+            } else {
+                container(text("").size(1))
+                    .width(Length::Fixed(14.0))
+                    .height(Length::Fixed(14.0))
+                    .into()
+            })
+            .on_press(map_msg(ProjectsMessage::NewProjectColorSelected(idx)))
+            .width(Length::Fixed(28.0))
+            .height(Length::Fixed(28.0))
+            .padding(0.0)
+            .style(move |_, _| button::Style {
+                background: Some(solid.into()),
+                border: Border {
+                    color: if selected {
+                        theme.text_primary
+                    } else {
+                        Color::TRANSPARENT
+                    },
+                    width: if selected { 2.0 } else { 0.0 },
+                    radius: RADIUS_PILL.into(),
+                },
+                ..button::Style::default()
+            }),
+        );
+    }
+    color_row.into()
 }
 
 fn view_modal_checklist<'a, Message: Clone + 'a>(
@@ -157,41 +283,39 @@ fn view_modal_checklist<'a, Message: Clone + 'a>(
 
     let mut items = column![].spacing(4.0);
     for item in &modal.checklist {
-        let icon = if item.done {
-            Icon::CheckCircle2
+        let label_el: Element<'a, Message> = if item.done {
+            strikethrough_text(
+                item.title.as_str(),
+                FONT_SIZE_BASE,
+                FONT_SANS,
+                theme.text_muted,
+            )
         } else {
-            Icon::CheckSquare
+            shaped_text(
+                item.title.as_str(),
+                FONT_SIZE_BASE,
+                FONT_SANS,
+                theme.text_primary,
+            )
+            .into()
         };
-        let fg = if item.done {
-            theme.success
-        } else {
-            theme.text_muted
-        };
+
         items = items.push(
             row![
-                button(
-                    row![
-                        icon_svg(icon, 16.0, fg),
-                        shaped_text(
-                            item.title.as_str(),
-                            FONT_SIZE_BASE,
-                            FONT_SANS,
-                            if item.done {
-                                theme.text_muted
-                            } else {
-                                theme.text_primary
-                            },
-                        ),
-                    ]
-                    .spacing(SPACE_2)
-                    .align_y(Alignment::Center),
-                )
-                .on_press(map_msg(ProjectsMessage::ModalToggleChecklistItem(
-                    item.id.clone(),
-                )))
-                .width(Length::Fill)
-                .padding([4.0, 6.0])
-                .style(move |_, status| theme.subtle_button_style(status)),
+                radio_check_circle(
+                    item.done,
+                    theme.success,
+                    18.0,
+                    map_msg(ProjectsMessage::ModalToggleChecklistItem(item.id.clone())),
+                    theme,
+                ),
+                button(label_el)
+                    .on_press(map_msg(ProjectsMessage::ModalToggleChecklistItem(
+                        item.id.clone(),
+                    )))
+                    .width(Length::Fill)
+                    .padding([4.0, 6.0])
+                    .style(move |_, status| theme.subtle_button_style(status)),
                 button(icon_svg(Icon::X, 14.0, theme.text_muted))
                     .on_press(map_msg(ProjectsMessage::ModalRemoveChecklistItem(
                         item.id.clone(),
@@ -199,6 +323,7 @@ fn view_modal_checklist<'a, Message: Clone + 'a>(
                     .padding(4.0)
                     .style(move |_, status| theme.subtle_button_style(status)),
             ]
+            .spacing(SPACE_2)
             .align_y(Alignment::Center),
         );
     }
@@ -234,10 +359,9 @@ fn view_modal_properties<'a, Message: Clone + 'a>(
     ];
     let mut status_pills = row![].spacing(6.0);
     for (st, label) in statuses {
-        let active = modal.status == st;
         status_pills = status_pills.push(choice_chip(
             label,
-            active,
+            modal.status == st,
             map_msg(ProjectsMessage::ModalSetStatus(st)),
             theme,
         ));
@@ -247,13 +371,13 @@ fn view_modal_properties<'a, Message: Clone + 'a>(
         (TaskPriority::Low, "Baixa"),
         (TaskPriority::Medium, "Média"),
         (TaskPriority::High, "Alta"),
+        (TaskPriority::Urgent, "Urgente"),
     ];
     let mut prio_pills = row![].spacing(6.0);
     for (p, label) in priorities {
-        let active = modal.priority == p;
         prio_pills = prio_pills.push(choice_chip(
             label,
-            active,
+            modal.priority == p,
             map_msg(ProjectsMessage::ModalSetPriority(p)),
             theme,
         ));
@@ -271,14 +395,26 @@ fn view_modal_properties<'a, Message: Clone + 'a>(
     );
 
     let mut rows = column![
-        prop_row("Status", status_pills.into(), theme),
-        prop_row("Prioridade", prio_pills.into(), theme),
+        prop_row(
+            "Status",
+            status_pills.wrap().vertical_spacing(6.0).into(),
+            theme
+        ),
+        prop_row(
+            "Prioridade",
+            prio_pills.wrap().vertical_spacing(6.0).into(),
+            theme
+        ),
         prop_row("Tem dia", has_date_btn, theme),
     ]
     .spacing(SPACE_2);
 
     if modal.has_date {
         let date_chips = row![
+            button(icon_svg(Icon::ChevronLeft, 14.0, theme.text_muted))
+                .on_press(map_msg(ProjectsMessage::ModalShiftDate(-1)))
+                .padding(4.0)
+                .style(move |_, status| theme.subtle_button_style(status)),
             shaped_text(
                 format!(
                     "{:02}/{:02}/{}",
@@ -290,6 +426,10 @@ fn view_modal_properties<'a, Message: Clone + 'a>(
                 FONT_MONO,
                 theme.text_primary,
             ),
+            button(icon_svg(Icon::ChevronRight, 14.0, theme.text_muted))
+                .on_press(map_msg(ProjectsMessage::ModalShiftDate(1)))
+                .padding(4.0)
+                .style(move |_, status| theme.subtle_button_style(status)),
             choice_chip(
                 "Hoje",
                 modal.date == today,
@@ -310,7 +450,9 @@ fn view_modal_properties<'a, Message: Clone + 'a>(
             ),
         ]
         .spacing(6.0)
-        .align_y(Alignment::Center);
+        .align_y(Alignment::Center)
+        .wrap()
+        .vertical_spacing(6.0);
 
         let mut turn_pills = row![].spacing(6.0);
         for turn in TaskTurn::ALL {
@@ -324,7 +466,11 @@ fn view_modal_properties<'a, Message: Clone + 'a>(
 
         rows = rows
             .push(prop_row("Dia", date_chips.into(), theme))
-            .push(prop_row("Período", turn_pills.into(), theme));
+            .push(prop_row(
+                "Período",
+                turn_pills.wrap().vertical_spacing(6.0).into(),
+                theme,
+            ));
     }
 
     let mut proj_pills = row![choice_chip(
@@ -334,7 +480,7 @@ fn view_modal_properties<'a, Message: Clone + 'a>(
         theme,
     )]
     .spacing(6.0);
-    for proj in state.projects.iter().take(3) {
+    for proj in &state.projects {
         let active = modal.project_id.as_ref() == Some(&proj.id);
         proj_pills = proj_pills.push(choice_chip(
             &proj.title,
@@ -343,7 +489,11 @@ fn view_modal_properties<'a, Message: Clone + 'a>(
             theme,
         ));
     }
-    rows = rows.push(prop_row("Projeto", proj_pills.into(), theme));
+    rows = rows.push(prop_row(
+        "Projeto",
+        proj_pills.wrap().vertical_spacing(6.0).into(),
+        theme,
+    ));
 
     rows.into()
 }
@@ -393,45 +543,14 @@ fn choice_chip<'a, Message: Clone + 'a>(
         .into()
 }
 
-/// Renderiza o Card do Dia ao clicar em uma célula do modo Calendário (Vídeo 1 `00:28`).
+/// Renderiza o Card do Dia ao clicar em uma célula do modo Calendário.
 pub fn view_day_peek_modal<'a, Message: Clone + 'a>(
     state: &'a ProjectsState,
     date: NaiveDate,
     theme: EstudyTheme,
     map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
-    let close_btn = button(icon_svg(Icon::X, 16.0, theme.text_muted))
-        .on_press(map_msg(ProjectsMessage::CloseDayPeek))
-        .padding(SPACE_1)
-        .style(move |_, status| theme.subtle_button_style(status));
-
-    let weekday_title = weekday_full_pt(date.weekday());
-    let full_subtitle = format!(
-        "{}, {} de {}",
-        weekday_title.to_lowercase(),
-        date.day(),
-        month_name_pt(date.month())
-    );
-
-    let header = row![
-        column![
-            text(weekday_title)
-                .size(FONT_SIZE_2XL)
-                .font(FONT_SERIF)
-                .color(theme.text_primary)
-                .shaping(text::Shaping::Advanced),
-            text(full_subtitle)
-                .size(FONT_SIZE_BASE)
-                .font(FONT_SERIF_ITALIC)
-                .color(theme.text_muted)
-                .shaping(text::Shaping::Advanced),
-        ]
-        .spacing(2.0),
-        container(close_btn)
-            .align_x(Alignment::End)
-            .width(Length::Fill),
-    ]
-    .align_y(Alignment::Start);
+    let header = view_day_peek_header(date, theme, &map_msg);
 
     let day_tasks: Vec<&Task> = state
         .filtered_tasks()
@@ -497,10 +616,56 @@ pub fn view_day_peek_modal<'a, Message: Clone + 'a>(
     .style(move |_, status| theme.ghost_button_style(status));
 
     modal_surface(
-        column![header, hairline_divider(theme), groups, add_btn].spacing(SPACE_3),
-        440.0,
+        column![
+            header,
+            hairline_divider(theme),
+            scrollable(groups).height(Length::Shrink),
+            add_btn
+        ]
+        .spacing(SPACE_3),
+        460.0,
         theme,
     )
+}
+
+fn view_day_peek_header<'a, Message: Clone + 'a>(
+    date: NaiveDate,
+    theme: EstudyTheme,
+    map_msg: &impl Fn(ProjectsMessage) -> Message,
+) -> Element<'a, Message> {
+    let close_btn = button(icon_svg(Icon::X, 16.0, theme.text_muted))
+        .on_press(map_msg(ProjectsMessage::CloseDayPeek))
+        .padding(SPACE_1)
+        .style(move |_, status| theme.subtle_button_style(status));
+
+    let weekday_title = weekday_full_pt(date.weekday());
+    let full_subtitle = format!(
+        "{}, {} de {}",
+        weekday_title.to_lowercase(),
+        date.day(),
+        month_name_pt(date.month())
+    );
+
+    row![
+        column![
+            text(weekday_title)
+                .size(FONT_SIZE_2XL)
+                .font(FONT_SERIF)
+                .color(theme.text_primary)
+                .shaping(text::Shaping::Advanced),
+            text(full_subtitle)
+                .size(FONT_SIZE_BASE)
+                .font(FONT_SERIF_ITALIC)
+                .color(theme.text_muted)
+                .shaping(text::Shaping::Advanced),
+        ]
+        .spacing(2.0),
+        container(close_btn)
+            .align_x(Alignment::End)
+            .width(Length::Fill),
+    ]
+    .align_y(Alignment::Start)
+    .into()
 }
 
 fn view_day_peek_turn_group<'a, Message: Clone + 'a>(
@@ -511,7 +676,7 @@ fn view_day_peek_turn_group<'a, Message: Clone + 'a>(
 ) -> Element<'a, Message> {
     let mut turn_col = column![
         row![
-            illustrated_svg(turn_illustrated_icon(turn), 16.0),
+            illustrated_svg_themed(turn_illustrated_icon(turn), 16.0, theme),
             shaped_text(
                 turn.label().to_uppercase(),
                 FONT_SIZE_XS,
@@ -526,37 +691,39 @@ fn view_day_peek_turn_group<'a, Message: Clone + 'a>(
 
     for task in in_turn {
         let done = task.status == TaskStatus::Done;
+        let title_el: Element<'a, Message> = if done {
+            strikethrough_text(
+                task.title.as_str(),
+                FONT_SIZE_MD,
+                FONT_SANS_MEDIUM,
+                theme.text_muted,
+            )
+        } else {
+            shaped_text(
+                task.title.as_str(),
+                FONT_SIZE_MD,
+                FONT_SANS_MEDIUM,
+                theme.text_primary,
+            )
+            .into()
+        };
+
         turn_col = turn_col.push(
             soft_surface(
                 row![
-                    button(icon_svg(
-                        if done {
-                            Icon::CheckCircle2
-                        } else {
-                            Icon::CheckSquare
-                        },
-                        16.0,
-                        if done {
-                            theme.success
-                        } else {
-                            theme.text_muted
-                        },
-                    ))
-                    .on_press(map_msg(ProjectsMessage::ToggleTaskDone(task.id.clone())))
-                    .padding(2.0)
-                    .style(move |_, status| theme.subtle_button_style(status)),
-                    shaped_text(
-                        task.title.as_str(),
-                        FONT_SIZE_MD,
-                        FONT_SANS_MEDIUM,
-                        if done {
-                            theme.text_muted
-                        } else {
-                            theme.text_primary
-                        },
-                    )
-                    .width(Length::Fill),
-                    illustrated_svg(priority_illustrated_icon(task.priority), 16.0),
+                    radio_check_circle(
+                        done,
+                        theme.success,
+                        18.0,
+                        map_msg(ProjectsMessage::ToggleTaskDone(task.id.clone())),
+                        theme,
+                    ),
+                    button(title_el)
+                        .on_press(map_msg(ProjectsMessage::OpenEditTaskModal(task.id.clone())))
+                        .width(Length::Fill)
+                        .padding([2.0, 4.0])
+                        .style(move |_, status| theme.subtle_button_style(status)),
+                    illustrated_svg_themed(priority_illustrated_icon(task.priority), 16.0, theme),
                 ]
                 .spacing(SPACE_2)
                 .align_y(Alignment::Center),
@@ -568,11 +735,12 @@ fn view_day_peek_turn_group<'a, Message: Clone + 'a>(
     turn_col.into()
 }
 
-/// Renderiza o Menu de Contexto flutuante exatamente na coordenada `(x, y)` do clique direito (Vídeo 1 `00:09`).
+/// Renderiza o Menu de Contexto flutuante exatamente na coordenada `(x, y)` do clique direito, clampado à janela real.
 #[allow(clippy::too_many_lines)]
 pub fn view_task_context_menu<'a, Message: Clone + 'a>(
     state: &'a ProjectsState,
     menu: &'a TaskContextMenu,
+    window_size: (f32, f32),
     theme: EstudyTheme,
     map_msg: impl Fn(ProjectsMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
@@ -652,19 +820,34 @@ pub fn view_task_context_menu<'a, Message: Clone + 'a>(
         ]
         .spacing(2.0),
     )
-    .width(Length::Fixed(186.0))
+    .width(Length::Fixed(190.0))
     .padding(6.0)
     .style(move |_| theme.floating_menu_style());
 
-    let mut menu_cluster = row![main_menu].spacing(6.0).align_y(Alignment::Start);
+    let safe_x = menu.x.clamp(16.0, (window_size.0 - 210.0).max(16.0));
+    let safe_y = menu.y.clamp(16.0, (window_size.1 - 330.0).max(16.0));
+    let open_sub_on_left = menu.submenu.is_some() && safe_x + 360.0 > window_size.0;
 
-    if let Some(sub) = menu.submenu {
+    let menu_cluster = if let Some(sub) = menu.submenu {
         let sub_box = view_context_submenu_box(sub, &task_id, theme, &map_msg);
-        menu_cluster = menu_cluster.push(sub_box);
-    }
+        if open_sub_on_left {
+            row![sub_box, main_menu]
+                .spacing(6.0)
+                .align_y(Alignment::Start)
+        } else {
+            row![main_menu, sub_box]
+                .spacing(6.0)
+                .align_y(Alignment::Start)
+        }
+    } else {
+        row![main_menu].spacing(6.0).align_y(Alignment::Start)
+    };
 
-    let safe_x = menu.x.clamp(16.0, 960.0);
-    let safe_y = menu.y.clamp(16.0, 520.0);
+    let left_pad = if open_sub_on_left {
+        (safe_x - 158.0).max(16.0)
+    } else {
+        safe_x
+    };
 
     mouse_area(
         container(menu_cluster)
@@ -674,7 +857,7 @@ pub fn view_task_context_menu<'a, Message: Clone + 'a>(
                 top: safe_y,
                 right: 0.0,
                 bottom: 0.0,
-                left: safe_x,
+                left: left_pad,
             }),
     )
     .on_press(map_msg(ProjectsMessage::CloseContextMenu))
@@ -715,6 +898,10 @@ fn view_context_submenu_box<'a, Message: Clone + 'a>(
             (
                 "Alta",
                 ProjectsMessage::ContextSetPriority(task_id.clone(), TaskPriority::High),
+            ),
+            (
+                "Urgente",
+                ProjectsMessage::ContextSetPriority(task_id.clone(), TaskPriority::Urgent),
             ),
         ],
         ContextSubmenu::Turn => TaskTurn::ALL
@@ -764,33 +951,37 @@ fn ctx_btn<'a, Message: Clone + 'a>(
     on_press: Message,
     theme: EstudyTheme,
 ) -> Element<'a, Message> {
-    button(shaped_text(
-        label,
-        FONT_SIZE_BASE,
-        FONT_SANS_MEDIUM,
-        if destructive {
-            theme.danger
-        } else {
-            theme.text_primary
-        },
-    ))
+    button(
+        text(label)
+            .size(FONT_SIZE_BASE)
+            .font(FONT_SANS_MEDIUM)
+            .shaping(text::Shaping::Advanced),
+    )
     .on_press(on_press)
     .width(Length::Fill)
     .padding([6.0, 10.0])
     .style(move |_, status| {
-        if matches!(status, button::Status::Hovered | button::Status::Pressed) {
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        if hovered {
             button::Style {
                 background: Some(
                     if destructive {
-                        Color {
-                            a: 0.14,
-                            ..theme.danger
-                        }
+                        theme.danger
                     } else {
-                        theme.accent_subtle
+                        theme.accent
                     }
                     .into(),
                 ),
+                text_color: theme.on_accent,
+                border: Border {
+                    radius: 8.0.into(),
+                    ..Border::default()
+                },
+                ..button::Style::default()
+            }
+        } else {
+            button::Style {
+                background: None,
                 text_color: if destructive {
                     theme.danger
                 } else {
@@ -802,8 +993,6 @@ fn ctx_btn<'a, Message: Clone + 'a>(
                 },
                 ..button::Style::default()
             }
-        } else {
-            theme.subtle_button_style(status)
         }
     })
     .into()
@@ -818,9 +1007,20 @@ fn ctx_submenu_trigger<'a, Message: Clone + 'a>(
     mouse_area(
         button(
             row![
-                shaped_text(label, FONT_SIZE_BASE, FONT_SANS_MEDIUM, theme.text_primary)
+                text(label)
+                    .size(FONT_SIZE_BASE)
+                    .font(FONT_SANS_MEDIUM)
+                    .shaping(text::Shaping::Advanced)
                     .width(Length::Fill),
-                icon_svg(Icon::ChevronRight, 14.0, theme.text_muted),
+                icon_svg(
+                    Icon::ChevronRight,
+                    14.0,
+                    if open {
+                        theme.on_accent
+                    } else {
+                        theme.text_muted
+                    },
+                ),
             ]
             .align_y(Alignment::Center),
         )
@@ -828,10 +1028,10 @@ fn ctx_submenu_trigger<'a, Message: Clone + 'a>(
         .width(Length::Fill)
         .padding([6.0, 10.0])
         .style(move |_, status| {
-            if open || matches!(status, button::Status::Hovered) {
+            if open || matches!(status, button::Status::Hovered | button::Status::Pressed) {
                 button::Style {
-                    background: Some(theme.accent_subtle.into()),
-                    text_color: theme.text_primary,
+                    background: Some(theme.accent.into()),
+                    text_color: theme.on_accent,
                     border: Border {
                         radius: 8.0.into(),
                         ..Border::default()
@@ -871,6 +1071,12 @@ pub fn editor_soft_style(theme: EstudyTheme, status: text_editor::Status) -> tex
     }
 }
 
+/// Nome completo do dia da semana em português a partir de uma data.
+#[must_use]
+pub fn weekday_full_pt_from_date(date: NaiveDate) -> &'static str {
+    weekday_full_pt(date.weekday())
+}
+
 /// Nome do mês em português.
 #[must_use]
 pub const fn month_name_pt(month: u32) -> &'static str {
@@ -890,7 +1096,7 @@ pub const fn month_name_pt(month: u32) -> &'static str {
     }
 }
 
-/// Indicador colorido de status de tarefa estilo Centralpinha.
+/// Indicador colorido de status de tarefa.
 #[must_use]
 pub fn task_status_visual(status: TaskStatus, theme: EstudyTheme) -> (&'static str, Color) {
     match status {
@@ -909,7 +1115,8 @@ pub fn project_tag_inline<'a, Message: 'a>(
     theme: EstudyTheme,
 ) -> Option<Element<'a, Message>> {
     let (idx, proj) = state.task_project_info(task)?;
-    let dot_color = CategoryColor::from_index(idx).solid(theme);
+    let color_idx = project_color_index(&proj.color_token, idx);
+    let dot_color = CategoryColor::from_index(color_idx).solid(theme);
     Some(
         row![
             color_dot(dot_color),
@@ -929,6 +1136,7 @@ pub fn project_tag_inline<'a, Message: 'a>(
 /// Superfície de cartão para fantasma de Drag & Drop flutuando sob o cursor.
 pub fn view_drag_ghost<'a, Message: 'a>(
     state: &'a ProjectsState,
+    window_size: (f32, f32),
     theme: EstudyTheme,
 ) -> Option<Element<'a, Message>> {
     let drag_id = state.dragging_task_id.as_ref()?;
@@ -937,7 +1145,7 @@ pub fn view_drag_ghost<'a, Message: 'a>(
 
     let ghost_card = container(
         row![
-            illustrated_svg(priority_illustrated_icon(task.priority), 16.0),
+            illustrated_svg_themed(priority_illustrated_icon(task.priority), 16.0, theme),
             shaped_text(
                 task.title.as_str(),
                 FONT_SIZE_BASE,
@@ -973,10 +1181,10 @@ pub fn view_drag_ghost<'a, Message: 'a>(
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(iced::Padding {
-                top: (y + 12.0).clamp(8.0, 720.0),
+                top: (y + 12.0).clamp(8.0, (window_size.1 - 60.0).max(8.0)),
                 right: 0.0,
                 bottom: 0.0,
-                left: (x + 12.0).clamp(8.0, 1080.0),
+                left: (x + 12.0).clamp(8.0, (window_size.0 - 270.0).max(8.0)),
             })
             .into(),
     )

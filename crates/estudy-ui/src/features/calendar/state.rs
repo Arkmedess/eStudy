@@ -1,17 +1,29 @@
 //! Estado e transições do Calendário Unificado e Drawer "Hoje".
 
-use chrono::{DateTime, Datelike, Duration, Months, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, Duration, Months, NaiveDate, NaiveTime, Timelike, Utc};
 use estudy_domain::{
     CalendarEvent, CalendarOccurrence, CalendarViewMode, EntityId, Project, RecurrenceRule, Task,
     expand_calendar_items,
 };
+use estudy_ui_kit::CategoryColor;
 use std::collections::BTreeSet;
 
-/// Rascunho do formulário rápido "+ Criar evento".
+/// As 5 categorias coloridas da Agenda exibidas na legenda e no formulário de compromisso.
+pub const AGENDA_CATEGORIES: [(&str, &str, CategoryColor); 5] = [
+    ("Pessoal", "terracotta", CategoryColor::Terracotta),
+    ("Estudos", "slate", CategoryColor::Slate),
+    ("Projetos", "sage", CategoryColor::Sage),
+    ("Prazos", "ochre", CategoryColor::Ochre),
+    ("Revisão", "lavender", CategoryColor::Lavender),
+];
+
+/// Rascunho do formulário rápido "+ Novo compromisso" / editar compromisso.
 #[derive(Debug, Clone)]
 pub struct CreateEventDraft {
     /// Indica se o formulário rápido está aberto.
     pub open: bool,
+    /// Identificador do evento em edição, se não for criação.
+    pub editing_event_id: Option<EntityId>,
     /// Título do novo evento.
     pub title: String,
     /// Hora de início (`HH:MM`).
@@ -22,17 +34,21 @@ pub struct CreateEventDraft {
     pub all_day: bool,
     /// Recorrência do novo evento.
     pub recurrence: Option<RecurrenceRule>,
+    /// Índice na lista `AGENDA_CATEGORIES` (`0..5`).
+    pub category_idx: usize,
 }
 
 impl Default for CreateEventDraft {
     fn default() -> Self {
         Self {
             open: false,
+            editing_event_id: None,
             title: String::new(),
             start_hhmm: "10:00".to_string(),
             end_hhmm: "11:00".to_string(),
             all_day: false,
             recurrence: None,
+            category_idx: 2,
         }
     }
 }
@@ -52,11 +68,16 @@ pub struct CalendarState {
     pub selected_project_ids: BTreeSet<EntityId>,
     /// Filtro rápido por tag.
     pub active_tag_filter: Option<String>,
-    /// Rascunho do formulário rápido "+ Criar evento".
+    /// Filtro rápido por categoria na legenda inferior (`0..5`).
+    pub active_category_filter: Option<usize>,
+    /// Rascunho do formulário rápido "+ Novo compromisso".
     pub create_draft: CreateEventDraft,
+    /// Controla abertura do Card do Dia ao clicar numa data da Agenda.
+    pub day_peek_open: bool,
     /// Controla abertura do Drawer deslizante "Hoje".
     pub today_drawer_open: bool,
     dirty_event_ids: BTreeSet<EntityId>,
+    deleted_event_ids: BTreeSet<EntityId>,
 }
 
 /// Mensagens da fatia Calendário.
@@ -68,14 +89,28 @@ pub enum CalendarMessage {
     SetViewMode(CalendarViewMode),
     /// Avança ou retrocede o período atual (`-1` ou `+1`).
     ShiftPeriod(i32),
+    /// Salta diretamente para a data de hoje.
+    JumpToToday(NaiveDate),
     /// Seleciona uma data específica (e salta para ela).
     SelectDate(NaiveDate),
+    /// Abre o Card do Dia da Agenda para visualizar/criar/editar compromissos.
+    OpenDayPeek(NaiveDate),
+    /// Fecha o Card do Dia da Agenda.
+    CloseDayPeek,
     /// Marca ou desmarca checkbox de filtro por projeto.
     ToggleProjectFilter(EntityId),
     /// Filtra por tag.
     ToggleTagFilter(Option<String>),
-    /// Abre ou fecha o formulário "+ Criar evento".
+    /// Filtra pela categoria selecionada na legenda do rodapé.
+    ToggleCategoryFilter(Option<usize>),
+    /// Abre ou fecha o formulário "+ Novo compromisso".
     ToggleCreateForm,
+    /// Abre o formulário preenchido para editar um evento existente.
+    EditEvent(EntityId),
+    /// Exclui (soft-delete) um evento existente.
+    DeleteEvent(EntityId),
+    /// Restaura um evento recém-excluído (Desfazer).
+    RestoreEvent(CalendarEvent),
     /// Atualiza título do novo evento.
     NewTitleChanged(String),
     /// Atualiza início (`HH:MM`) do novo evento.
@@ -86,7 +121,9 @@ pub enum CalendarMessage {
     ToggleNewAllDay,
     /// Define recorrência do novo evento.
     SetNewRecurrence(Option<RecurrenceRule>),
-    /// Cria o evento na data selecionada.
+    /// Define a categoria colorida do compromisso no formulário.
+    SetNewCategory(usize),
+    /// Cria ou atualiza o evento na data selecionada.
     CreateEvent,
     /// Abre o Drawer "Hoje".
     OpenTodayDrawer,
@@ -153,15 +190,25 @@ impl CalendarState {
             sidebar_visible: true,
             selected_project_ids: BTreeSet::new(),
             active_tag_filter: None,
+            active_category_filter: None,
             create_draft: CreateEventDraft::default(),
+            day_peek_open: false,
             today_drawer_open: false,
             dirty_event_ids: BTreeSet::new(),
+            deleted_event_ids: BTreeSet::new(),
         }
     }
 
     /// Extrai e limpa os IDs de eventos modificados para persistência seletiva.
     pub fn take_dirty_events(&mut self) -> Vec<EntityId> {
         std::mem::take(&mut self.dirty_event_ids)
+            .into_iter()
+            .collect()
+    }
+
+    /// Extrai e limpa os IDs de eventos removidos (soft-delete) para persistência no `SQLite`.
+    pub fn take_deleted_events(&mut self) -> Vec<EntityId> {
+        std::mem::take(&mut self.deleted_event_ids)
             .into_iter()
             .collect()
     }
@@ -195,7 +242,7 @@ impl CalendarState {
         }
     }
 
-    /// Expande eventos e tarefas com prazo aplicando os filtros de projeto e tag ativos.
+    /// Expande eventos e tarefas com prazo aplicando os filtros de projeto, tag e categoria ativos.
     #[must_use]
     pub fn visible_occurrences(&self, tasks: &[Task]) -> Vec<CalendarOccurrence> {
         let (start, end) = self.visible_range();
@@ -203,6 +250,38 @@ impl CalendarState {
         all.into_iter()
             .filter(|occ| self.matches_filters(occ))
             .collect()
+    }
+
+    /// Expande todo o mês de `cursor_date` aplicando os filtros ativos (para a aba `Lista`).
+    #[must_use]
+    pub fn month_occurrences(&self, tasks: &[Task]) -> Vec<CalendarOccurrence> {
+        let start = NaiveDate::from_ymd_opt(self.cursor_date.year(), self.cursor_date.month(), 1)
+            .unwrap_or(self.cursor_date);
+        let end = start
+            .checked_add_months(Months::new(1))
+            .map_or(self.cursor_date, |next| next - Duration::days(1));
+        expand_calendar_items(&self.events, tasks, start, end)
+            .into_iter()
+            .filter(|occ| self.matches_filters(occ))
+            .collect()
+    }
+
+    /// Retorna o índice de categoria (`0..5`) associado a uma ocorrência de calendário.
+    #[must_use]
+    pub fn occurrence_category_idx(&self, occ: &CalendarOccurrence) -> usize {
+        if occ.is_task_deadline {
+            return 3;
+        }
+        self.events
+            .iter()
+            .find(|ev| ev.id == occ.source_id)
+            .map_or(2, |ev| category_idx_from_token(&ev.color_token))
+    }
+
+    /// Retorna a cor semântica de uma ocorrência da Agenda.
+    #[must_use]
+    pub fn occurrence_color(&self, occ: &CalendarOccurrence) -> CategoryColor {
+        AGENDA_CATEGORIES[self.occurrence_category_idx(occ)].2
     }
 
     /// Lista todas as tags únicas dos eventos carregados.
@@ -223,15 +302,52 @@ impl CalendarState {
             CalendarMessage::ToggleSidebar => self.sidebar_visible = !self.sidebar_visible,
             CalendarMessage::SetViewMode(mode) => self.view_mode = mode,
             CalendarMessage::ShiftPeriod(delta) => self.shift_period(delta),
+            CalendarMessage::JumpToToday(today) => self.cursor_date = today,
             CalendarMessage::SelectDate(date) => self.cursor_date = date,
+            CalendarMessage::OpenDayPeek(date) => {
+                self.cursor_date = date;
+                self.day_peek_open = true;
+            }
+            CalendarMessage::CloseDayPeek => {
+                self.day_peek_open = false;
+            }
             CalendarMessage::ToggleProjectFilter(project_id) => {
                 if !self.selected_project_ids.remove(&project_id) {
                     self.selected_project_ids.insert(project_id);
                 }
             }
             CalendarMessage::ToggleTagFilter(tag) => self.active_tag_filter = tag,
+            CalendarMessage::ToggleCategoryFilter(cat) => {
+                self.active_category_filter = if self.active_category_filter == cat {
+                    None
+                } else {
+                    cat
+                };
+            }
             CalendarMessage::ToggleCreateForm => {
                 self.create_draft.open = !self.create_draft.open;
+                if self.create_draft.open {
+                    self.create_draft.editing_event_id = None;
+                    self.create_draft.title.clear();
+                }
+            }
+            CalendarMessage::EditEvent(event_id) => self.start_edit_event(&event_id),
+            CalendarMessage::DeleteEvent(event_id) => {
+                let before = self.events.len();
+                self.events.retain(|ev| ev.id != event_id);
+                if self.events.len() < before {
+                    self.dirty_event_ids.remove(&event_id);
+                    self.deleted_event_ids.insert(event_id);
+                }
+            }
+            CalendarMessage::RestoreEvent(mut event) => {
+                let id = event.id.clone();
+                event.updated_at = now_utc;
+                self.deleted_event_ids.remove(&id);
+                if !self.events.iter().any(|ev| ev.id == id) {
+                    self.events.push(event);
+                }
+                self.dirty_event_ids.insert(id);
             }
             CalendarMessage::NewTitleChanged(title) => self.create_draft.title = title,
             CalendarMessage::NewStartChanged(val) => self.create_draft.start_hhmm = val,
@@ -240,7 +356,10 @@ impl CalendarState {
                 self.create_draft.all_day = !self.create_draft.all_day;
             }
             CalendarMessage::SetNewRecurrence(rule) => self.create_draft.recurrence = rule,
-            CalendarMessage::CreateEvent => self.create_event_from_form(now_utc),
+            CalendarMessage::SetNewCategory(idx) => {
+                self.create_draft.category_idx = idx % AGENDA_CATEGORIES.len();
+            }
+            CalendarMessage::CreateEvent => self.create_or_update_event_from_form(now_utc),
             CalendarMessage::OpenTodayDrawer => self.today_drawer_open = true,
             CalendarMessage::CloseTodayDrawer => self.today_drawer_open = false,
         }
@@ -287,7 +406,12 @@ impl CalendarState {
             None => true,
         };
 
-        project_ok && tag_ok
+        let cat_ok = match self.active_category_filter {
+            Some(cat_idx) => self.occurrence_category_idx(occ) == cat_idx,
+            None => true,
+        };
+
+        project_ok && tag_ok && cat_ok
     }
 
     fn shift_period(&mut self, delta: i32) {
@@ -313,7 +437,29 @@ impl CalendarState {
         };
     }
 
-    fn create_event_from_form(&mut self, now_utc: DateTime<Utc>) {
+    fn start_edit_event(&mut self, event_id: &EntityId) {
+        let Some(ev) = self
+            .events
+            .iter()
+            .find(|item| item.id == *event_id)
+            .cloned()
+        else {
+            return;
+        };
+        self.cursor_date = ev.starts_at.date_naive();
+        self.create_draft = CreateEventDraft {
+            open: true,
+            editing_event_id: Some(ev.id),
+            title: ev.title,
+            start_hhmm: format!("{:02}:{:02}", ev.starts_at.hour(), ev.starts_at.minute()),
+            end_hhmm: format!("{:02}:{:02}", ev.ends_at.hour(), ev.ends_at.minute()),
+            all_day: ev.all_day,
+            recurrence: ev.recurrence,
+            category_idx: category_idx_from_token(&ev.color_token),
+        };
+    }
+
+    fn create_or_update_event_from_form(&mut self, now_utc: DateTime<Utc>) {
         let title = self.create_draft.title.trim().to_string();
         if title.is_empty() {
             return;
@@ -325,26 +471,53 @@ impl CalendarState {
         if ends_at < starts_at {
             ends_at = starts_at + Duration::hours(1);
         }
+        let color_token = AGENDA_CATEGORIES
+            [self.create_draft.category_idx % AGENDA_CATEGORIES.len()]
+        .1
+        .to_string();
 
-        let id = EntityId::new_v7();
-        self.events.push(CalendarEvent {
-            id: id.clone(),
-            title,
-            description: String::new(),
-            project_id: self.selected_project_ids.iter().next().cloned(),
-            starts_at,
-            ends_at,
-            all_day: self.create_draft.all_day,
-            recurrence: self.create_draft.recurrence,
-            color_token: "accent".to_string(),
-            tags: Vec::new(),
-            created_at: now_utc,
-            updated_at: now_utc,
-        });
-        self.dirty_event_ids.insert(id);
+        if let Some(edit_id) = self.create_draft.editing_event_id.take()
+            && let Some(ev) = self.events.iter_mut().find(|item| item.id == edit_id)
+        {
+            ev.title = title;
+            ev.starts_at = starts_at;
+            ev.ends_at = ends_at;
+            ev.all_day = self.create_draft.all_day;
+            ev.recurrence = self.create_draft.recurrence;
+            ev.color_token = color_token;
+            ev.updated_at = now_utc;
+            self.dirty_event_ids.insert(edit_id);
+        } else {
+            let id = EntityId::new_v7();
+            self.events.push(CalendarEvent {
+                id: id.clone(),
+                title,
+                description: String::new(),
+                project_id: self.selected_project_ids.iter().next().cloned(),
+                starts_at,
+                ends_at,
+                all_day: self.create_draft.all_day,
+                recurrence: self.create_draft.recurrence,
+                color_token,
+                tags: Vec::new(),
+                created_at: now_utc,
+                updated_at: now_utc,
+            });
+            self.dirty_event_ids.insert(id);
+        }
 
         self.create_draft.title.clear();
         self.create_draft.open = false;
+    }
+}
+
+fn category_idx_from_token(token: &str) -> usize {
+    match token {
+        "terracotta" | "coral" => 0,
+        "slate" => 1,
+        "ochre" | "warning" => 3,
+        "lavender" => 4,
+        _ => 2,
     }
 }
 

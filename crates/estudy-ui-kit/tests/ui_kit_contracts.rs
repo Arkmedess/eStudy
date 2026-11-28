@@ -1,4 +1,4 @@
-//! Testes de contrato para presets WCAG 2.2 AA, catálogo de 87 SVGs e Heatmap 365d.
+//! Testes de contrato para presets WCAG 2.2 AA, catálogo de 89 SVGs e Heatmap 365d.
 
 #![allow(clippy::expect_used)]
 
@@ -94,8 +94,10 @@ fn should_pass_wcag_aa_contrast_across_all_10_theme_variants() {
 }
 
 #[test]
-fn should_provide_87_unique_valid_svg_icons_without_emojis() {
-    assert_eq!(Icon::ALL.len(), 87);
+fn should_provide_89_unique_valid_svg_icons_without_emojis() {
+    assert_eq!(Icon::ALL.len(), 89);
+    assert!(Icon::ALL.contains(&Icon::Check));
+    assert!(Icon::ALL.contains(&Icon::Circle));
 
     let mut names = HashSet::new();
     for icon in Icon::ALL {
@@ -141,7 +143,20 @@ fn should_provide_17_multicolor_illustrated_icons_with_distinct_fills() {
             "ícone ilustrado {name} precisa de preenchimentos coloridos reais (encontrado < 2)"
         );
         let _handle = icon.cached_handle();
+        let light_svg = icon.to_svg_string_for_mode(ThemeMode::Light);
+        let dark_svg = icon.to_svg_string_for_mode(ThemeMode::Dark);
+        assert!(dark_svg.starts_with("<svg ") && dark_svg.ends_with("</svg>"));
+        assert_eq!(light_svg, svg);
+        assert!(
+            !dark_svg.contains("stroke=\"#2B241E\""),
+            "ícone ilustrado {name} no modo escuro não deve usar contorno escuro #2B241E"
+        );
+        let _dark_handle = icon.cached_handle_for_mode(ThemeMode::Dark);
     }
+    assert_ne!(
+        IllustratedIcon::Settings.to_svg_string_for_mode(ThemeMode::Light),
+        IllustratedIcon::Settings.to_svg_string_for_mode(ThemeMode::Dark)
+    );
 }
 
 #[test]
@@ -303,4 +318,25 @@ fn should_normalize_sparkline_series_safely() {
     assert!((ramp[0].1 - 1.0).abs() < f32::EPSILON);
     assert!((ramp[1].1 - 0.5).abs() < f32::EPSILON);
     assert!((ramp[2].1 - 0.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn should_expose_polished_interactive_gradient_and_slider_styles() {
+    use iced::widget::{button, slider};
+    for preset in ThemePreset::ALL {
+        for mode in ThemeMode::ALL {
+            let theme = EstudyTheme::resolve(preset, mode);
+            let hovered = theme.interactive_card_style(button::Status::Hovered);
+            let idle = theme.interactive_card_style(button::Status::Active);
+            assert!(hovered.shadow.blur_radius > idle.shadow.blur_radius);
+
+            let grad = theme.gradient_card_style(theme.accent, theme.panel, 0.5, theme.on_accent);
+            assert!(grad.background.is_some());
+
+            let sl_idle = theme.slider_style(slider::Status::Active);
+            let sl_drag = theme.slider_style(slider::Status::Dragged);
+            assert!(sl_idle.rail.width >= 4.0);
+            assert_ne!(sl_drag.handle.background, sl_idle.handle.background);
+        }
+    }
 }

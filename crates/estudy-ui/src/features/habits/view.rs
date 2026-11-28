@@ -1,10 +1,10 @@
-//! Renderização do módulo de Hábitos (Vídeo 2 `00:06`: cabeçalho editorial, matriz semanal com `+ Novo hábito` integrado na base e resumo mensal).
+//! Renderização do módulo de Hábitos: matriz semanal tátil, criação inline com seletor de cor e calendário mensal.
 
 use chrono::{Datelike, Duration, NaiveDate};
 use estudy_domain::days_in_month;
 use estudy_ui_kit::widgets::{
-    card, color_dot, editorial_page_header, empty_placeholder, hairline_divider, icon_svg,
-    progress_track, shaped_text, soft_surface,
+    card, color_dot, dashed_frame, editorial_page_header, empty_placeholder, hairline_divider,
+    icon_svg, progress_track, radio_check_circle, shaped_text, soft_surface,
 };
 use estudy_ui_kit::{
     CategoryColor, EstudyTheme, FONT_MONO, FONT_MONO_MEDIUM, FONT_SANS, FONT_SANS_MEDIUM,
@@ -13,15 +13,16 @@ use estudy_ui_kit::{
     SPACE_4, SPACE_5, SPACE_6,
 };
 use iced::widget::{button, column, container, row, scrollable, text, text_input};
-use iced::{Alignment, Border, Element, Length};
+use iced::{Alignment, Border, Color, Element, Length};
 
 use super::state::{HabitsMessage, HabitsState};
 use crate::features::projects::modals::month_name_pt;
 
-/// Renderiza a tela completa de Hábitos no padrão editorial limpo.
+/// Renderiza a tela completa de Hábitos no padrão editorial limpo e responsivo.
 pub fn view_habits<'a, Message: Clone + 'a>(
     state: &'a HabitsState,
     today: NaiveDate,
+    content_width: f32,
     theme: EstudyTheme,
     map_msg: impl Fn(HabitsMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
@@ -50,17 +51,25 @@ pub fn view_habits<'a, Message: Clone + 'a>(
     );
 
     let weekly_card = view_weekly_grid_card(state, today, theme, map_msg.clone());
-    let monthly_row = row![
-        view_monthly_bars_card(state, today, theme),
-        view_monthly_calendar_card(state, today, theme, &map_msg),
-    ]
-    .spacing(SPACE_4)
-    .width(Length::Fill);
+    let bars_card = view_monthly_bars_card(state, today, content_width, theme);
+    let month_cal = view_monthly_calendar_card(state, today, content_width, theme, &map_msg);
+
+    let monthly_section: Element<'a, Message> = if content_width < 880.0 {
+        column![bars_card, month_cal]
+            .spacing(SPACE_4)
+            .width(Length::Fill)
+            .into()
+    } else {
+        row![bars_card, month_cal]
+            .spacing(SPACE_4)
+            .width(Length::Fill)
+            .into()
+    };
 
     scrollable(
         container(
             container(
-                column![header, summary_line, weekly_card, monthly_row]
+                column![header, summary_line, weekly_card, monthly_section]
                     .spacing(SPACE_4)
                     .width(Length::Fill),
             )
@@ -71,6 +80,10 @@ pub fn view_habits<'a, Message: Clone + 'a>(
         .center_x(Length::Fill)
         .width(Length::Fill),
     )
+    .direction(scrollable::Direction::Vertical(
+        scrollable::Scrollbar::new().width(5).scroller_width(5),
+    ))
+    .style(move |_, status| theme.subtle_scrollbar_style(status))
     .height(Length::Fill)
     .into()
 }
@@ -198,7 +211,10 @@ fn view_weekly_days_header<'a, Message: 'a>(
             .width(Length::FillPortion(1)),
         );
     }
-    days_header.into()
+
+    days_header
+        .push(container(text("")).width(Length::Fixed(28.0)))
+        .into()
 }
 
 fn view_inline_create_footer<'a, Message: Clone + 'a>(
@@ -206,39 +222,141 @@ fn view_inline_create_footer<'a, Message: Clone + 'a>(
     theme: EstudyTheme,
     map_msg: impl Fn(HabitsMessage) -> Message + Clone + 'a,
 ) -> Element<'a, Message> {
+    if !state.create_open {
+        let trigger = button(
+            container(
+                row![
+                    icon_svg(Icon::Plus, 16.0, theme.text_muted),
+                    shaped_text(
+                        "Novo hábito",
+                        FONT_SIZE_BASE,
+                        FONT_SANS_MEDIUM,
+                        theme.text_muted,
+                    ),
+                ]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
+            )
+            .center_x(Length::Fill)
+            .width(Length::Fill),
+        )
+        .on_press(map_msg(HabitsMessage::ToggleCreateForm))
+        .width(Length::Fill)
+        .padding([10.0, SPACE_4])
+        .style(move |_, status| button::Style {
+            background: matches!(status, button::Status::Hovered)
+                .then_some(theme.surface_soft.into()),
+            text_color: theme.text_muted,
+            border: Border {
+                radius: RADIUS_CONTROL.into(),
+                ..Border::default()
+            },
+            ..button::Style::default()
+        });
+
+        return dashed_frame(trigger, theme.border_subtle, None, RADIUS_CONTROL);
+    }
+
     let on_title = map_msg.clone();
-    let input = text_input(
-        "+ Novo hábito (ex.: Leitura 20 min, Estudar Inglês)...",
-        &state.new_title,
-    )
-    .on_input(move |val| on_title(HabitsMessage::NewTitleChanged(val)))
-    .on_submit(map_msg(HabitsMessage::CreateHabit))
-    .padding([8.0, 14.0])
-    .size(FONT_SIZE_BASE)
-    .width(Length::Fill)
-    .style(move |_, status| theme.soft_input_style(status));
+    let title_input = text_input("Nome (ex.: Leitura 20 min)...", &state.new_title)
+        .on_input(move |val| on_title(HabitsMessage::NewTitleChanged(val)))
+        .on_submit(map_msg(HabitsMessage::CreateHabit))
+        .padding([8.0, 12.0])
+        .size(FONT_SIZE_BASE)
+        .width(Length::FillPortion(3))
+        .style(move |_, status| theme.soft_input_style(status));
 
-    let btn = button(
-        row![
-            icon_svg(Icon::Plus, 16.0, theme.text_primary),
-            shaped_text(
-                "Novo hábito",
-                FONT_SIZE_BASE,
-                FONT_SANS_MEDIUM,
-                theme.text_primary
-            ),
-        ]
-        .spacing(6.0)
-        .align_y(Alignment::Center),
-    )
+    let on_sub = map_msg.clone();
+    let sub_input = text_input("Meta opcional (ex.: 20 páginas)...", &state.new_subtitle)
+        .on_input(move |val| on_sub(HabitsMessage::NewSubtitleChanged(val)))
+        .on_submit(map_msg(HabitsMessage::CreateHabit))
+        .padding([8.0, 12.0])
+        .size(FONT_SIZE_BASE)
+        .width(Length::FillPortion(2))
+        .style(move |_, status| theme.soft_input_style(status));
+
+    let color_dots = view_habit_color_picker(state.new_color_index, theme, &map_msg);
+
+    let cancel_btn = button(shaped_text(
+        "Cancelar",
+        FONT_SIZE_SM,
+        FONT_SANS_MEDIUM,
+        theme.text_muted,
+    ))
+    .on_press(map_msg(HabitsMessage::ToggleCreateForm))
+    .padding([7.0, 12.0])
+    .style(move |_, status| theme.subtle_button_style(status));
+
+    let add_btn = button(shaped_text(
+        "Adicionar",
+        FONT_SIZE_SM,
+        FONT_SANS_SEMIBOLD,
+        theme.on_accent,
+    ))
     .on_press(map_msg(HabitsMessage::CreateHabit))
-    .padding([8.0, 16.0])
-    .style(move |_, status| theme.ghost_button_style(status));
+    .padding([7.0, 16.0])
+    .style(move |_, status| theme.primary_button_style(status));
 
-    row![input, btn]
-        .spacing(SPACE_2)
-        .align_y(Alignment::Center)
-        .into()
+    soft_surface(
+        column![
+            row![title_input, sub_input]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
+            row![
+                color_dots,
+                container(row![cancel_btn, add_btn].spacing(SPACE_2))
+                    .align_x(Alignment::End)
+                    .width(Length::Fill),
+            ]
+            .spacing(SPACE_2)
+            .align_y(Alignment::Center),
+        ]
+        .spacing(SPACE_2),
+        theme,
+    )
+    .padding(SPACE_3)
+    .width(Length::Fill)
+    .into()
+}
+
+fn view_habit_color_picker<'a, Message: Clone + 'a>(
+    selected_idx: usize,
+    theme: EstudyTheme,
+    map_msg: &impl Fn(HabitsMessage) -> Message,
+) -> Element<'a, Message> {
+    let mut color_dots = row![].spacing(6.0).align_y(Alignment::Center);
+    for (idx, cat) in CategoryColor::ALL.iter().enumerate() {
+        let selected = selected_idx == idx;
+        let solid = cat.solid(theme);
+        color_dots = color_dots.push(
+            button(if selected {
+                icon_svg(Icon::Check, 12.0, theme.on_accent)
+            } else {
+                container(text("").size(1))
+                    .width(Length::Fixed(12.0))
+                    .height(Length::Fixed(12.0))
+                    .into()
+            })
+            .on_press(map_msg(HabitsMessage::NewColorSelected(idx)))
+            .width(Length::Fixed(22.0))
+            .height(Length::Fixed(22.0))
+            .padding(0.0)
+            .style(move |_, _| button::Style {
+                background: Some(solid.into()),
+                border: Border {
+                    color: if selected {
+                        theme.text_primary
+                    } else {
+                        Color::TRANSPARENT
+                    },
+                    width: if selected { 2.0 } else { 0.0 },
+                    radius: RADIUS_PILL.into(),
+                },
+                ..button::Style::default()
+            }),
+        );
+    }
+    color_dots.into()
 }
 
 fn view_weekly_habit_row<'a, Message: Clone + 'a>(
@@ -278,38 +396,16 @@ fn view_weekly_habit_row<'a, Message: Clone + 'a>(
     for offset in 0..7_i64 {
         let d = week_start + Duration::days(offset);
         let done = habit.is_done_on(d);
-        let solid = cat.solid(theme);
-        let border_c = cat.border(theme);
-        let check_btn = button(if done {
-            icon_svg(Icon::CheckCircle2, 16.0, theme.on_accent)
-        } else {
-            container(text("").size(1))
-                .width(Length::Fixed(16.0))
-                .height(Length::Fixed(16.0))
-                .into()
-        })
-        .on_press(map_msg(HabitsMessage::ToggleHabitDate {
-            habit_id: habit.id.clone(),
-            date: d,
-        }))
-        .width(Length::Fixed(30.0))
-        .height(Length::Fixed(30.0))
-        .padding(0.0)
-        .style(move |_, status| button::Style {
-            background: if done {
-                Some(solid.into())
-            } else if matches!(status, button::Status::Hovered) {
-                Some(theme.card_hover.into())
-            } else {
-                Some(theme.surface_soft.into())
-            },
-            border: Border {
-                color: if done { solid } else { border_c },
-                width: 1.0,
-                radius: RADIUS_PILL.into(),
-            },
-            ..button::Style::default()
-        });
+        let check_btn = radio_check_circle(
+            done,
+            cat.solid(theme),
+            30.0,
+            map_msg(HabitsMessage::ToggleHabitDate {
+                habit_id: habit.id.clone(),
+                date: d,
+            }),
+            theme,
+        );
 
         line = line.push(
             container(check_btn)
@@ -318,12 +414,19 @@ fn view_weekly_habit_row<'a, Message: Clone + 'a>(
         );
     }
 
-    line.into()
+    let delete_btn = button(icon_svg(Icon::Trash2, 14.0, theme.text_muted))
+        .on_press(map_msg(HabitsMessage::RemoveHabit(habit.id.clone())))
+        .width(Length::Fixed(28.0))
+        .padding(6.0)
+        .style(move |_, status| theme.subtle_button_style(status));
+
+    line.push(delete_btn).into()
 }
 
 fn view_monthly_bars_card<'a, Message: 'a>(
     state: &'a HabitsState,
     today: NaiveDate,
+    content_width: f32,
     theme: EstudyTheme,
 ) -> Element<'a, Message> {
     let overall = state.monthly_overall_pct(today);
@@ -396,13 +499,18 @@ fn view_monthly_bars_card<'a, Message: 'a>(
         .spacing(SPACE_3),
         theme,
     )
-    .width(Length::FillPortion(5))
+    .width(if content_width < 880.0 {
+        Length::Fill
+    } else {
+        Length::FillPortion(5)
+    })
     .into()
 }
 
 fn view_monthly_calendar_card<'a, Message: Clone + 'a>(
     state: &'a HabitsState,
     today: NaiveDate,
+    content_width: f32,
     theme: EstudyTheme,
     map_msg: &impl Fn(HabitsMessage) -> Message,
 ) -> Element<'a, Message> {
@@ -430,6 +538,16 @@ fn view_monthly_calendar_card<'a, Message: Clone + 'a>(
     .spacing(SPACE_2)
     .align_y(Alignment::Center);
 
+    let weekdays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+    let mut weekday_header = row![].spacing(SPACE_1).width(Length::Fill);
+    for w in weekdays {
+        weekday_header = weekday_header.push(
+            container(shaped_text(w, 11.0, FONT_SANS_SEMIBOLD, theme.text_muted))
+                .center_x(Length::Fill)
+                .width(Length::FillPortion(1)),
+        );
+    }
+
     let total_days = days_in_month(state.view_year, state.view_month);
     let first = NaiveDate::from_ymd_opt(state.view_year, state.view_month, 1);
     let offset = first.map_or(0, |d| d.weekday().num_days_from_sunday() as usize);
@@ -442,7 +560,7 @@ fn view_monthly_calendar_card<'a, Message: Clone + 'a>(
         ));
     }
 
-    let mut grid = column![].spacing(SPACE_1);
+    let mut grid = column![weekday_header].spacing(SPACE_1);
     for week in cells.chunks(7) {
         let mut line = row![].spacing(SPACE_1).width(Length::Fill);
         for slot in week {
@@ -462,7 +580,11 @@ fn view_monthly_calendar_card<'a, Message: Clone + 'a>(
         column![header, hairline_divider(theme), grid].spacing(SPACE_3),
         theme,
     )
-    .width(Length::FillPortion(7))
+    .width(if content_width < 880.0 {
+        Length::Fill
+    } else {
+        Length::FillPortion(7)
+    })
     .into()
 }
 

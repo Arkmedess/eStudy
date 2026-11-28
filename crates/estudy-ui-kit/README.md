@@ -6,8 +6,8 @@ Fornece o Design System oficial do **eStudy** em `Iced 0.14`: os 5 presets de te
 ## Contrato Público
 - `EstudyTheme`, `ThemePreset` (*Oliva Orgânico, eStudy Menta, Cyber Minimalist, Solar Amber, Velvet Sakura*), `ThemeMode` (`Light` / `Dark`), `CategoryColor` (7 categorias semânticas).
 - `embedded_fonts()`, `FONT_SERIF`, `FONT_SERIF_MEDIUM`, `FONT_SERIF_ITALIC`, `FONT_SANS`, `FONT_SANS_MEDIUM`, `FONT_SANS_SEMIBOLD`, `FONT_SANS_BOLD`, `FONT_MONO`, `FONT_MONO_MEDIUM`.
-- `IllustratedIcon` (`17` SVGs coloridos artesanais para módulos, períodos, prioridades e mascote Mochi) e `Icon` (`87` SVGs monoline `1.75px`).
-- Primitivos `shaped_text` (`Shaping::Advanced` obrigatório), `editorial_page_header`, `illustrated_svg`, `icon_svg`, `card`, `tonal_card`, `segmented_switch`, `pill_chip` e `modal_surface`.
+- `IllustratedIcon` (`17` SVGs coloridos artesanais com versão adaptada para Light e Dark em módulos, períodos, prioridades e mascote Mochi) e `Icon` (`89` SVGs monoline `1.75px`).
+- Primitivos `shaped_text` (`Shaping::Advanced` obrigatório), `editorial_page_header`, `illustrated_svg`, `illustrated_svg_themed`, `icon_svg`, `radio_check_circle`, `dashed_frame`, `strikethrough_text`, `card`, `tonal_card`, `segmented_switch`, `pill_chip` e `modal_surface`.
 
 ## Testes e Preview Visual
 ```bash

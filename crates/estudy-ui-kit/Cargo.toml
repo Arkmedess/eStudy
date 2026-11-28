@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Design System do eStudy em Iced: 5 presets WCAG 2.2 AA, 87 ícones SVG, Heatmap 365d e widgets base."
+description = "Design System do eStudy em Iced: 5 presets WCAG 2.2 AA, 89 ícones SVG, Heatmap 365d e widgets base."
 
 [dependencies]
 iced.workspace = true

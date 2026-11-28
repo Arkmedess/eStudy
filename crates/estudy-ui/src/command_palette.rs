@@ -71,6 +71,8 @@ pub enum PaletteAction {
     OpenProject(EntityId),
     /// Abre o Drawer de uma tarefa específica.
     OpenTask(EntityId),
+    /// Abre diretamente uma nota do Segundo Cérebro.
+    OpenNote(EntityId),
     /// Inicia um bloco de foco Pomodoro com duração em minutos.
     StartFocus(u16),
     /// Cria uma tarefa diretamente (ou abre Projetos se título vazio).

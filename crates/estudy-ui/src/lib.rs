@@ -7,7 +7,7 @@ pub mod app;
 pub mod command_palette;
 pub mod features;
 
-pub use app::{AppMessage, EstudyApp, QuickPopup};
+pub use app::{AppMessage, EstudyApp, QuickPopup, UndoAction};
 pub use command_palette::{
     AppRoute, CommandPaletteState, PaletteAction, PaletteCommand, PaletteMessage,
 };

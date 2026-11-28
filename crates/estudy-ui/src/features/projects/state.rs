@@ -196,6 +196,8 @@ pub struct ProjectsState {
     pub week_start: NaiveDate,
     /// Tarefa atualmente sendo arrastada no Drag & Drop.
     pub dragging_task_id: Option<EntityId>,
+    /// Tarefa aguardando deslocamento mínimo (`>= 6px`) antes de iniciar Drag & Drop.
+    pub pending_drag_task: Option<(EntityId, f32, f32)>,
     /// Zona de soltura atualmente destacada sob o cursor durante o arraste.
     pub hovered_drop_target: Option<DragTarget>,
     /// Última coordenada conhecida do cursor `(x, y)` na janela.
@@ -206,6 +208,12 @@ pub struct ProjectsState {
     pub task_modal: Option<TaskModalState>,
     /// Card do Dia aberto ao clicar numa célula do modo Calendário.
     pub day_peek_date: Option<NaiveDate>,
+    /// Indica se o modal de criação rápida de projeto está aberto.
+    pub create_project_modal_open: bool,
+    /// Nome temporário para o novo projeto em criação.
+    pub new_project_title: String,
+    /// Índice de cor (`0..7`) selecionado para o novo projeto.
+    pub new_project_color_idx: usize,
     dirty_project_ids: BTreeSet<EntityId>,
     dirty_task_ids: BTreeSet<EntityId>,
     deleted_task_ids: BTreeSet<EntityId>,
@@ -219,10 +227,14 @@ pub enum ProjectsMessage {
     SetTasksViewMode(TasksViewMode),
     /// Avança ou retrocede a semana exibida (`-1` ou `+1`).
     ShiftWeek(i64),
+    /// Salta diretamente para a semana que contém a data informada.
+    JumpToWeekOf(NaiveDate),
     /// Conclui ou reabre uma tarefa em 1 clique direto no cartão (`○ -> ✓`).
     ToggleTaskDone(EntityId),
     /// Cicla o status direto na pílula do cartão (`A fazer -> Em andamento -> Concluído`).
     CycleTaskStatus(EntityId),
+    /// Registra o pressionamento sobre um cartão antes do threshold de arraste (`>= 6px`).
+    PointerDownTask(EntityId),
     /// Inicia o arraste de um cartão de tarefa.
     BeginDragTask(EntityId),
     /// Atualiza a zona de soltura sob o cursor durante o arraste.
@@ -249,6 +261,8 @@ pub enum ProjectsMessage {
     DuplicateTask(EntityId),
     /// Exclui (soft-delete) uma tarefa existente.
     DeleteTask(EntityId),
+    /// Restaura uma tarefa recém-excluída (Desfazer).
+    RestoreTask(Box<Task>),
     /// Abre o modal central para criar nova tarefa (com data e período opcionais pré-preenchidos).
     OpenCreateTaskModal {
         /// Data inicial sugerida (`None` = Sem dia).
@@ -282,10 +296,20 @@ pub enum ProjectsMessage {
     ModalToggleHasDate,
     /// Define a data agendada no modal.
     ModalSetDate(NaiveDate),
+    /// Avança ou recua a data agendada no modal em `delta` dias.
+    ModalShiftDate(i64),
     /// Define o período agendado no modal.
     ModalSetTurn(TaskTurn),
     /// Define o projeto vinculado no modal.
     ModalSetProject(Option<EntityId>),
+    /// Abre ou fecha o modal de criação de novo projeto.
+    ToggleCreateProjectModal,
+    /// Atualiza o nome digitado para o novo projeto.
+    NewProjectTitleChanged(String),
+    /// Seleciona o índice de cor do novo projeto.
+    NewProjectColorSelected(usize),
+    /// Cria o novo projeto e já o seleciona como filtro ativo.
+    CreateProject,
     /// Abre o Card do Dia ao clicar em uma data do calendário mensal.
     OpenDayPeek(NaiveDate),
     /// Fecha o Card do Dia.
@@ -426,11 +450,15 @@ impl ProjectsState {
             view_mode: TasksViewMode::Week,
             week_start,
             dragging_task_id: None,
+            pending_drag_task: None,
             hovered_drop_target: None,
             cursor_pos: (260.0, 200.0),
             context_menu: None,
             task_modal: None,
             day_peek_date: None,
+            create_project_modal_open: false,
+            new_project_title: String::new(),
+            new_project_color_idx: 0,
             dirty_project_ids: BTreeSet::new(),
             dirty_task_ids: BTreeSet::new(),
             deleted_task_ids: BTreeSet::new(),
@@ -559,10 +587,22 @@ impl ProjectsState {
                 self.week_start += Duration::weeks(delta_weeks);
                 self.selected_day = self.week_start;
             }
+            ProjectsMessage::JumpToWeekOf(date) => {
+                let offset = i64::from(date.weekday().num_days_from_monday());
+                self.week_start = date - Duration::days(offset);
+                self.selected_day = date;
+                self.calendar_year = date.year();
+                self.calendar_month = date.month();
+            }
             ProjectsMessage::ToggleTaskDone(id) => self.toggle_task_done(&id, now_utc),
             ProjectsMessage::CycleTaskStatus(id) => self.cycle_task_status(&id, now_utc),
+            ProjectsMessage::PointerDownTask(id) => {
+                self.context_menu = None;
+                self.pending_drag_task = Some((id, self.cursor_pos.0, self.cursor_pos.1));
+            }
             ProjectsMessage::BeginDragTask(id) => {
                 self.context_menu = None;
+                self.pending_drag_task = None;
                 self.dragging_task_id = Some(id);
             }
             ProjectsMessage::HoverDropTarget(target) => {
@@ -570,13 +610,24 @@ impl ProjectsState {
                     self.hovered_drop_target = target;
                 }
             }
-            ProjectsMessage::DropTask => self.finish_drop(now_utc),
+            ProjectsMessage::DropTask => {
+                self.pending_drag_task = None;
+                self.finish_drop(now_utc);
+            }
             ProjectsMessage::CancelDrag => {
+                self.pending_drag_task = None;
                 self.dragging_task_id = None;
                 self.hovered_drop_target = None;
             }
             ProjectsMessage::CursorMoved(x, y) => {
                 self.cursor_pos = (x, y);
+                if self.dragging_task_id.is_none()
+                    && let Some((task_id, sx, sy)) = &self.pending_drag_task
+                    && (x - *sx).hypot(y - *sy) >= 6.0
+                {
+                    self.dragging_task_id = Some(task_id.clone());
+                    self.pending_drag_task = None;
+                }
             }
             ProjectsMessage::OpenContextMenu(task_id) => {
                 let (x, y) = self.cursor_pos;
@@ -636,6 +687,16 @@ impl ProjectsState {
             }
             ProjectsMessage::DuplicateTask(id) => self.duplicate_task(&id, now_utc),
             ProjectsMessage::DeleteTask(id) => self.delete_task(&id),
+            ProjectsMessage::RestoreTask(boxed_task) => {
+                let mut task = *boxed_task;
+                let id = task.id.clone();
+                task.updated_at = now_utc;
+                self.deleted_task_ids.remove(&id);
+                if !self.tasks.iter().any(|t| t.id == id) {
+                    self.tasks.push(task);
+                }
+                self.dirty_task_ids.insert(id);
+            }
             ProjectsMessage::OpenCreateTaskModal { date, turn } => {
                 self.context_menu = None;
                 self.open_create_modal(date, turn);
@@ -908,6 +969,31 @@ impl ProjectsState {
         self.drawer = None;
     }
 
+    fn create_project_from_modal(&mut self, now_utc: chrono::DateTime<chrono::Utc>) {
+        let title = self.new_project_title.trim().to_string();
+        if title.is_empty() {
+            return;
+        }
+        let id = EntityId::new_v7();
+        let sort_order = i32::try_from(self.projects.len()).unwrap_or(0);
+        let color_token = color_token_for_index(self.new_project_color_idx).to_string();
+        self.projects.push(Project {
+            id: id.clone(),
+            title,
+            description: String::new(),
+            color_token,
+            status: ProjectStatus::InProgress,
+            framework: ProjectFramework::WeeklyTurns,
+            sort_order,
+            created_at: now_utc,
+            updated_at: now_utc,
+        });
+        self.dirty_project_ids.insert(id.clone());
+        self.selected_project_id = Some(id);
+        self.new_project_title.clear();
+        self.create_project_modal_open = false;
+    }
+
     fn update_modal_or_drawer(
         &mut self,
         message: ProjectsMessage,
@@ -985,6 +1071,12 @@ impl ProjectsState {
                     m.has_date = true;
                 }
             }
+            ProjectsMessage::ModalShiftDate(delta_days) => {
+                if let Some(m) = &mut self.task_modal {
+                    m.date += Duration::days(delta_days);
+                    m.has_date = true;
+                }
+            }
             ProjectsMessage::ModalSetTurn(turn) => {
                 if let Some(m) = &mut self.task_modal {
                     m.turn = turn;
@@ -995,7 +1087,33 @@ impl ProjectsState {
                     m.project_id = proj_id;
                 }
             }
+            ProjectsMessage::ToggleCreateProjectModal
+            | ProjectsMessage::NewProjectTitleChanged(_)
+            | ProjectsMessage::NewProjectColorSelected(_)
+            | ProjectsMessage::CreateProject => self.update_create_project_modal(message, now_utc),
             other => self.update_drawer(other, now_utc),
+        }
+    }
+
+    fn update_create_project_modal(
+        &mut self,
+        message: ProjectsMessage,
+        now_utc: chrono::DateTime<chrono::Utc>,
+    ) {
+        match message {
+            ProjectsMessage::ToggleCreateProjectModal => {
+                self.create_project_modal_open = !self.create_project_modal_open;
+                if self.create_project_modal_open {
+                    self.new_project_title.clear();
+                    self.new_project_color_idx = self.projects.len() % 7;
+                }
+            }
+            ProjectsMessage::NewProjectTitleChanged(title) => self.new_project_title = title,
+            ProjectsMessage::NewProjectColorSelected(idx) => {
+                self.new_project_color_idx = idx % 7;
+            }
+            ProjectsMessage::CreateProject => self.create_project_from_modal(now_utc),
+            _ => {}
         }
     }
 
@@ -1308,6 +1426,33 @@ impl ProjectsState {
             self.dirty_task_ids.insert(task_id.clone());
         }
         drawer.new_tag_name.clear();
+    }
+}
+
+/// Converte `color_token` salvo no projeto para o índice estável de `CategoryColor`, usando `fallback_idx` para tokens legados.
+#[must_use]
+pub fn project_color_index(color_token: &str, fallback_idx: usize) -> usize {
+    match color_token {
+        "sage" => 0,
+        "terracotta" => 1,
+        "slate" => 2,
+        "ochre" => 3,
+        "lavender" => 4,
+        "moss" => 5,
+        "coral" => 6,
+        _ => fallback_idx % 7,
+    }
+}
+
+const fn color_token_for_index(index: usize) -> &'static str {
+    match index % 7 {
+        0 => "sage",
+        1 => "terracotta",
+        2 => "slate",
+        3 => "ochre",
+        4 => "lavender",
+        5 => "moss",
+        _ => "coral",
     }
 }
 

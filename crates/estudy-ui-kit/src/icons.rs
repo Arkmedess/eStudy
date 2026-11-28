@@ -1,5 +1,6 @@
-//! Catálogo único de 87 ícones vetoriais SVG (estilo Lucide, zero emojis).
+//! Catálogo único de 89 ícones vetoriais SVG (estilo Lucide, zero emojis).
 
+use crate::theme::ThemeMode;
 use iced::Color;
 use iced::widget::svg;
 use std::sync::LazyLock;
@@ -11,7 +12,7 @@ static CACHED_SVG_HANDLES: LazyLock<Vec<svg::Handle>> = LazyLock::new(|| {
         .collect()
 });
 
-/// Catálogo completo dos 87 ícones usados no eStudy.
+/// Catálogo completo dos 89 ícones usados no eStudy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Icon {
     /// Home.
@@ -188,6 +189,10 @@ pub enum Icon {
     Repeat,
     /// Ajuda.
     HelpCircle,
+    /// Check limpo sem caixa.
+    Check,
+    /// Círculo vazio fino.
+    Circle,
 }
 
 struct IconSpec {
@@ -632,11 +637,21 @@ const ICON_SPECS: &[IconSpec] = &[
         name: "help-circle",
         geometry: r#"<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>"#,
     },
+    IconSpec {
+        icon: Icon::Check,
+        name: "check",
+        geometry: r#"<path d="M5 12.5 10 17.5 19 6.5"/>"#,
+    },
+    IconSpec {
+        icon: Icon::Circle,
+        name: "circle",
+        geometry: r#"<circle cx="12" cy="12" r="9"/>"#,
+    },
 ];
 
 impl Icon {
-    /// Lista completa dos 87 ícones suportados pelo eStudy.
-    pub const ALL: [Self; 87] = [
+    /// Lista completa dos 89 ícones suportados pelo eStudy.
+    pub const ALL: [Self; 89] = [
         Self::Home,
         Self::Search,
         Self::Command,
@@ -724,6 +739,8 @@ impl Icon {
         Self::Code2,
         Self::Repeat,
         Self::HelpCircle,
+        Self::Check,
+        Self::Circle,
     ];
 
     /// Identificador único em kebab-case do ícone.
@@ -802,7 +819,18 @@ pub enum IllustratedIcon {
 static CACHED_ILLUSTRATED_HANDLES: LazyLock<Vec<svg::Handle>> = LazyLock::new(|| {
     IllustratedIcon::ALL
         .iter()
-        .map(|icon| svg::Handle::from_memory(icon.to_svg_string().into_bytes()))
+        .map(|icon| {
+            svg::Handle::from_memory(icon.to_svg_string_for_mode(ThemeMode::Light).into_bytes())
+        })
+        .collect()
+});
+
+static CACHED_ILLUSTRATED_DARK_HANDLES: LazyLock<Vec<svg::Handle>> = LazyLock::new(|| {
+    IllustratedIcon::ALL
+        .iter()
+        .map(|icon| {
+            svg::Handle::from_memory(icon.to_svg_string_for_mode(ThemeMode::Dark).into_bytes())
+        })
         .collect()
 });
 
@@ -946,25 +974,43 @@ impl IllustratedIcon {
         self.spec().name
     }
 
-    /// Documento SVG colorido completo preservando preenchimentos e traços próprios.
+    /// Documento SVG colorido completo preservando preenchimentos e traços próprios (modo claro).
     #[must_use]
     pub fn to_svg_string(self) -> String {
+        self.to_svg_string_for_mode(ThemeMode::Light)
+    }
+
+    /// Documento SVG colorido adaptado ao modo claro ou escuro para manter contraste nítido.
+    #[must_use]
+    pub fn to_svg_string_for_mode(self, mode: ThemeMode) -> String {
         let spec = self.spec();
+        let body = match mode {
+            ThemeMode::Light => spec.body.to_string(),
+            ThemeMode::Dark => adapt_illustrated_body_for_dark(self, spec.body),
+        };
         format!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{body}</svg>"#,
             vb = spec.view_box,
-            body = spec.body
         )
     }
 
     /// Handle SVG pré-carregado em cache estático (zero alocação por frame).
     #[must_use]
     pub fn cached_handle(self) -> svg::Handle {
+        self.cached_handle_for_mode(ThemeMode::Light)
+    }
+
+    /// Handle SVG pré-carregado em cache estático adaptado ao modo claro ou escuro.
+    #[must_use]
+    pub fn cached_handle_for_mode(self, mode: ThemeMode) -> svg::Handle {
         let idx = Self::ALL
             .iter()
             .position(|candidate| *candidate == self)
             .unwrap_or(0);
-        CACHED_ILLUSTRATED_HANDLES[idx].clone()
+        match mode {
+            ThemeMode::Light => CACHED_ILLUSTRATED_HANDLES[idx].clone(),
+            ThemeMode::Dark => CACHED_ILLUSTRATED_DARK_HANDLES[idx].clone(),
+        }
     }
 
     fn spec(self) -> &'static IllustratedSpec {
@@ -972,6 +1018,52 @@ impl IllustratedIcon {
             .iter()
             .find(|spec| spec.icon == self)
             .unwrap_or(&ILLUSTRATED_SPECS[0])
+    }
+}
+
+fn adapt_illustrated_body_for_dark(icon: IllustratedIcon, light_body: &str) -> String {
+    match icon {
+        IllustratedIcon::MascotMochi => light_body
+            .replace(
+                "fill=\"#EFE8DA\" stroke=\"#2B241E\"",
+                "fill=\"#2B322A\" stroke=\"#D6CCB8\"",
+            )
+            .replace("stroke=\"#2B241E\"", "stroke=\"#362D26\""),
+        IllustratedIcon::Settings => light_body
+            .replace("fill=\"#E3DAC8\"", "fill=\"#384138\"")
+            .replace("fill=\"#4E6B52\"", "fill=\"#8EB892\"")
+            .replace("stroke=\"#2B241E\"", "stroke=\"#EAE2D5\""),
+        IllustratedIcon::TurnAnytime => light_body
+            .replace("fill=\"#DCE5DA\"", "fill=\"#2A362C\"")
+            .replace("fill=\"#FAF7F0\"", "fill=\"#1B231D\"")
+            .replace("stroke=\"#374C3B\"", "stroke=\"#B7CEB0\"")
+            .replace("stroke=\"#C85A36\"", "stroke=\"#F09A7A\""),
+        IllustratedIcon::TurnMorning => light_body
+            .replace("stroke=\"#8C5811\"", "stroke=\"#FCE296\"")
+            .replace("stroke=\"#D98A2B\"", "stroke=\"#F6C445\""),
+        IllustratedIcon::TurnAfternoon => light_body
+            .replace("stroke=\"#7D2D14\"", "stroke=\"#F7B194\"")
+            .replace("stroke=\"#C85A36\"", "stroke=\"#EE855E\""),
+        IllustratedIcon::TurnEvening => light_body
+            .replace("fill=\"#7D8CE0\"", "fill=\"#94A3F5\"")
+            .replace("stroke=\"#323B75\"", "stroke=\"#D8DEFF\""),
+        IllustratedIcon::PriorityLow => {
+            light_body.replace("stroke=\"#2F4734\"", "stroke=\"#B8D6BE\"")
+        }
+        IllustratedIcon::PriorityMedium => {
+            light_body.replace("stroke=\"#6E470B\"", "stroke=\"#F5D487\"")
+        }
+        IllustratedIcon::PriorityHigh => {
+            light_body.replace("stroke=\"#66220E\"", "stroke=\"#F5A88F\"")
+        }
+        IllustratedIcon::PriorityUrgent => {
+            light_body.replace("stroke=\"#5C1510\"", "stroke=\"#FAB4AC\"")
+        }
+        _ => light_body
+            .replace("stroke=\"#2B241E\"", "stroke=\"#EAE2D5\"")
+            .replace("fill=\"#FAF4E8\"", "fill=\"#2B332C\"")
+            .replace("fill=\"#FCF9F2\"", "fill=\"#293029\"")
+            .replace("stroke=\"#374C3B\"", "stroke=\"#B2C9A8\""),
     }
 }
 

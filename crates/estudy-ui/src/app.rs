@@ -4,7 +4,8 @@ use chrono::Timelike;
 use estudy_domain::{CalendarViewMode, ClockPort, EntityId, PomodoroPreset, TaskStatus, TaskTurn};
 use estudy_ui_kit::widgets::{
     card, category_pill, color_dot, editorial_page_header, empty_placeholder, hairline_divider,
-    icon_svg, illustrated_svg, kbd_hint, modal_surface, section_header, shaped_text, soft_surface,
+    icon_svg, illustrated_svg_themed, kbd_hint, modal_surface, radio_check_circle, section_header,
+    segmented_switch, shaped_text, soft_surface,
 };
 use estudy_ui_kit::{
     CategoryColor, CosmeticLoadout, EstudyTheme, FONT_MONO, FONT_SANS, FONT_SANS_MEDIUM,
@@ -14,8 +15,10 @@ use estudy_ui_kit::{
     SIDEBAR_WIDTH, SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_5, SPACE_6, ThemeMode, ThemePreset,
 };
 use iced::keyboard::{self, Key, Modifiers};
-use iced::widget::{button, column, container, mouse_area, row, scrollable, stack, text};
-use iced::{Alignment, Border, Element, Event, Length, Subscription, mouse};
+use iced::widget::{
+    button, column, container, mouse_area, row, scrollable, stack, text, text_input,
+};
+use iced::{Alignment, Border, Color, Element, Event, Length, Subscription, mouse};
 use std::sync::Arc;
 
 use crate::command_palette::{
@@ -47,11 +50,34 @@ pub enum QuickPopup {
     TaskQuick(EntityId),
 }
 
+/// Última exclusão reversível armazenada para a ação `Desfazer`.
+#[derive(Debug, Clone)]
+pub enum UndoAction {
+    /// Restaura uma tarefa excluída.
+    RestoreTask(estudy_domain::Task),
+    /// Restaura um hábito excluído.
+    RestoreHabit(estudy_domain::Habit),
+    /// Restaura uma nota excluída.
+    RestoreNote(estudy_domain::KnowledgeNote),
+    /// Restaura um compromisso excluído.
+    RestoreEvent(estudy_domain::CalendarEvent),
+}
+
 /// Mensagens raiz do shell MVU do eStudy.
 #[derive(Debug, Clone)]
 pub enum AppMessage {
     /// Navega para uma rota principal.
     Navigate(AppRoute),
+    /// Atualiza as dimensões atuais da janela para layout responsivo real.
+    WindowResized(f32, f32),
+    /// Desfaz a última exclusão registrada no toast de status.
+    UndoLastAction,
+    /// Atualiza rascunho do nome exibido na tela Ajustes.
+    DisplayNameChanged(String),
+    /// Aplica o novo nome de exibição no perfil da Home.
+    SaveDisplayName,
+    /// Seleciona o preset padrão de Pomodoro nas preferências de Ajustes.
+    SelectDefaultFocusPreset(PomodoroPreset),
     /// Dispara o atalho rápido de Foco/Pomodoro em tela cheia.
     QuickFocusShortcut,
     /// Abre ou fecha o popover de notificações e conquistas.
@@ -154,6 +180,12 @@ pub struct EstudyApp {
     pub active_popup: Option<QuickPopup>,
     /// Mensagem de feedback transitório da ação mais recente.
     pub status_banner: Option<String>,
+    /// Última ação destrutiva reversível via botão `Desfazer`.
+    pub undo_action: Option<UndoAction>,
+    /// Dimensões lógicas atuais da janela (`largura, altura`).
+    pub window_size: (f32, f32),
+    /// Rascunho editável do nome do usuário na tela Ajustes.
+    pub display_name_draft: String,
 }
 
 impl EstudyApp {
@@ -189,6 +221,10 @@ impl EstudyApp {
         let now = clock.now_utc();
         let habits_state = HabitsState::sample(now.date_naive());
         let second_brain_state = SecondBrainState::sample(now);
+        let display_name_draft = match &home_state {
+            HomeLoadState::Ready(data) => data.profile.display_name.clone(),
+            _ => "Estudante".to_string(),
+        };
         Self {
             clock,
             route: AppRoute::Home,
@@ -206,6 +242,9 @@ impl EstudyApp {
             second_brain_state,
             active_popup: None,
             status_banner: None,
+            undo_action: None,
+            window_size: (1360.0, 840.0),
+            display_name_draft,
         }
     }
 
@@ -291,6 +330,27 @@ impl EstudyApp {
                 self.mascot_bubble = MascotBubbleState::Closed;
                 self.active_popup = None;
             }
+            AppMessage::WindowResized(w, h) => {
+                self.window_size = (w, h);
+            }
+            AppMessage::UndoLastAction => self.apply_undo_action(),
+            AppMessage::DisplayNameChanged(name) => {
+                self.display_name_draft = name;
+            }
+            AppMessage::SaveDisplayName => {
+                let clean = self.display_name_draft.trim().to_string();
+                if !clean.is_empty()
+                    && let HomeLoadState::Ready(data) = &mut self.home_state
+                {
+                    data.profile.display_name = clean;
+                    self.undo_action = None;
+                    self.status_banner = Some("Nome de exibição atualizado.".to_string());
+                }
+            }
+            AppMessage::SelectDefaultFocusPreset(preset) => {
+                self.focus_state
+                    .update(FocusMessage::SelectPreset(preset), self.clock.now_utc());
+            }
             AppMessage::QuickFocusShortcut => {
                 self.notifications_open = false;
                 self.modules_menu_open = false;
@@ -355,37 +415,106 @@ impl EstudyApp {
             }
             AppMessage::DismissBanner => {
                 self.status_banner = None;
+                self.undo_action = None;
             }
             AppMessage::Palette(msg) => self.handle_palette_message(msg),
             AppMessage::Home(msg) => self.handle_home_message(msg),
             AppMessage::Projects(msg) => self.handle_projects_message(msg),
-            AppMessage::Calendar(msg) => {
-                let now = self.clock.now_utc();
-                self.calendar_state.update(msg, now);
-            }
+            AppMessage::Calendar(msg) => self.handle_calendar_message(msg),
             AppMessage::Focus(msg) => {
                 let now = self.clock.now_utc();
                 self.focus_state.update(msg, now);
             }
-            AppMessage::Habits(msg) => {
-                self.habits_state.update(msg);
+            AppMessage::Habits(msg) => self.handle_habits_message(msg),
+            AppMessage::SecondBrain(msg) => self.handle_second_brain_message(msg),
+        }
+    }
+
+    fn apply_undo_action(&mut self) {
+        let Some(undo) = self.undo_action.take() else {
+            return;
+        };
+        let now = self.clock.now_utc();
+        match undo {
+            UndoAction::RestoreTask(task) => {
+                self.projects_state
+                    .update(ProjectsMessage::RestoreTask(Box::new(task)), now);
             }
-            AppMessage::SecondBrain(msg) => {
-                let now = self.clock.now_utc();
-                match &msg {
-                    SecondBrainMessage::SelectNote(id) if self.route == AppRoute::Home => {
-                        self.active_popup = Some(QuickPopup::Note(id.clone()));
-                    }
-                    SecondBrainMessage::CloseNoteModal => {
-                        if matches!(self.active_popup, Some(QuickPopup::Note(_))) {
-                            self.active_popup = None;
-                        }
-                    }
-                    _ => {}
-                }
-                self.second_brain_state.update(msg, now);
+            UndoAction::RestoreHabit(habit) => {
+                self.habits_state.update(HabitsMessage::RestoreHabit(habit));
+            }
+            UndoAction::RestoreNote(note) => {
+                self.second_brain_state
+                    .update(SecondBrainMessage::RestoreNote(note), now);
+            }
+            UndoAction::RestoreEvent(event) => {
+                self.calendar_state
+                    .update(CalendarMessage::RestoreEvent(event), now);
             }
         }
+        self.status_banner = Some("Ação desfeita.".to_string());
+    }
+
+    fn handle_calendar_message(&mut self, msg: CalendarMessage) {
+        if let CalendarMessage::DeleteEvent(ref id) = msg
+            && let Some(ev) = self
+                .calendar_state
+                .events
+                .iter()
+                .find(|e| e.id == *id)
+                .cloned()
+        {
+            self.status_banner = Some(format!("Compromisso \"{}\" excluído.", ev.title));
+            self.undo_action = Some(UndoAction::RestoreEvent(ev));
+        }
+        let now = self.clock.now_utc();
+        self.calendar_state.update(msg, now);
+    }
+
+    fn handle_habits_message(&mut self, msg: HabitsMessage) {
+        if let HabitsMessage::RemoveHabit(ref id) = msg
+            && let Some(habit) = self
+                .habits_state
+                .habits
+                .iter()
+                .find(|h| h.id == *id)
+                .cloned()
+        {
+            self.status_banner = Some(format!("Hábito \"{}\" excluído.", habit.title));
+            self.undo_action = Some(UndoAction::RestoreHabit(habit));
+        }
+        self.habits_state.update(msg);
+    }
+
+    fn handle_second_brain_message(&mut self, msg: SecondBrainMessage) {
+        let now = self.clock.now_utc();
+        match &msg {
+            SecondBrainMessage::SelectNote(id) if self.route == AppRoute::Home => {
+                self.active_popup = Some(QuickPopup::Note(id.clone()));
+            }
+            SecondBrainMessage::CloseNoteModal => {
+                if matches!(self.active_popup, Some(QuickPopup::Note(_))) {
+                    self.active_popup = None;
+                }
+            }
+            SecondBrainMessage::DeleteNote(id) => {
+                if let Some(note) = self
+                    .second_brain_state
+                    .notes
+                    .iter()
+                    .find(|n| n.id == *id)
+                    .cloned()
+                {
+                    self.status_banner = Some(format!("Nota \"{}\" excluída.", note.title));
+                    self.undo_action = Some(UndoAction::RestoreNote(note));
+                }
+                if matches!(self.active_popup, Some(QuickPopup::Note(_))) {
+                    self.active_popup = None;
+                }
+            }
+            _ => {}
+        }
+        self.second_brain_state.update(msg, now);
     }
 
     /// Fecha exatamente a camada superior ativa na pilha previsível de overlays (`Esc`).
@@ -396,7 +525,10 @@ impl EstudyApp {
             self.projects_state.context_menu = None;
         } else if self.projects_state.dragging_task_id.is_some() {
             self.projects_state.dragging_task_id = None;
+            self.projects_state.pending_drag_task = None;
             self.projects_state.hovered_drop_target = None;
+        } else if self.projects_state.create_project_modal_open {
+            self.projects_state.create_project_modal_open = false;
         } else if self.projects_state.task_modal.is_some() || self.projects_state.drawer.is_some() {
             self.projects_state.flush_deferred();
             self.projects_state.task_modal = None;
@@ -410,6 +542,8 @@ impl EstudyApp {
             self.second_brain_state.note_modal_open = false;
         } else if self.calendar_state.create_draft.open {
             self.calendar_state.create_draft.open = false;
+        } else if self.calendar_state.day_peek_open {
+            self.calendar_state.day_peek_open = false;
         } else if self.notifications_open || self.modules_menu_open || self.mascot_bubble.is_open()
         {
             self.notifications_open = false;
@@ -433,6 +567,9 @@ impl EstudyApp {
             Event::Mouse(mouse::Event::CursorMoved { position }) => Some(AppMessage::Projects(
                 ProjectsMessage::CursorMoved(position.x, position.y),
             )),
+            Event::Window(iced::window::Event::Resized(size)) => {
+                Some(AppMessage::WindowResized(size.width, size.height))
+            }
             _ => None,
         });
 
@@ -475,9 +612,13 @@ impl EstudyApp {
 
         let mut layers: Vec<Element<'_, AppMessage>> = vec![base_shell.into()];
 
-        // Pílula flutuante no canto superior direito apenas quando o cronômetro Pomodoro está rodando.
-        if self.is_focus_ticking() {
+        // Pílula flutuante discreta no canto inferior direito quando o cronômetro Pomodoro está rodando.
+        if self.is_focus_ticking() && self.route != AppRoute::Focus {
             layers.push(self.view_floating_focus_pill(theme));
+        }
+
+        if let Some(banner) = &self.status_banner {
+            layers.push(self.view_status_toast(banner, theme));
         }
 
         if self.mascot_bubble.is_open() && !self.nav_sidebar_open {
@@ -513,6 +654,17 @@ impl EstudyApp {
     }
 
     fn handle_projects_message(&mut self, msg: ProjectsMessage) {
+        if let ProjectsMessage::DeleteTask(ref id) = msg
+            && let Some(task) = self
+                .projects_state
+                .tasks
+                .iter()
+                .find(|t| t.id == *id)
+                .cloned()
+        {
+            self.status_banner = Some(format!("Tarefa \"{}\" excluída.", task.title));
+            self.undo_action = Some(UndoAction::RestoreTask(task));
+        }
         if let ProjectsMessage::StartFocusForTask(task_id) = msg {
             let title = self
                 .projects_state
@@ -531,6 +683,7 @@ impl EstudyApp {
                 now,
             );
             self.focus_state.update(FocusMessage::Start, now);
+            self.undo_action = None;
             self.status_banner = Some(format!("Pomodoro iniciado para \"{title}\"."));
             return;
         }
@@ -600,6 +753,26 @@ impl EstudyApp {
                 action: PaletteAction::Navigate(AppRoute::Calendar),
             });
         }
+        for note in &self.second_brain_state.notes {
+            entries.push(PaletteCommand {
+                id: format!("note:{}", note.id),
+                label: note.title.clone(),
+                hint: format!("Segundo cérebro · {}", note.kind.label()),
+                shortcut: None,
+                icon: Icon::Brain,
+                action: PaletteAction::OpenNote(note.id.clone()),
+            });
+        }
+        for habit in &self.habits_state.habits {
+            entries.push(PaletteCommand {
+                id: format!("habit:{}", habit.id),
+                label: habit.title.clone(),
+                hint: format!("Hábito · {}", habit.subtitle),
+                shortcut: None,
+                icon: Icon::Flame,
+                action: PaletteAction::Navigate(AppRoute::Habits),
+            });
+        }
         self.palette.set_search_entries(entries);
     }
 
@@ -620,6 +793,11 @@ impl EstudyApp {
                 self.route = AppRoute::Projects;
                 self.projects_state
                     .update(ProjectsMessage::OpenTaskDrawer(task_id), now);
+            }
+            PaletteAction::OpenNote(note_id) => {
+                self.route = AppRoute::SecondBrain;
+                self.second_brain_state
+                    .update(SecondBrainMessage::SelectNote(note_id), now);
             }
             PaletteAction::CycleThemePreset => {
                 self.loadout.theme_preset = self.loadout.theme_preset.next();
@@ -728,6 +906,28 @@ impl EstudyApp {
                 self.route = AppRoute::Calendar;
                 self.calendar_state.view_mode = CalendarViewMode::Week;
             }
+            HomeMessage::OpenCalendarDate(date) => {
+                self.route = AppRoute::Calendar;
+                self.calendar_state
+                    .update(CalendarMessage::OpenDayPeek(date), now);
+            }
+            HomeMessage::StartFocusWithMinutes(minutes) => {
+                let preset = match minutes {
+                    50 => PomodoroPreset::Deep50_10,
+                    15 => PomodoroPreset::Sprint15_3,
+                    _ => PomodoroPreset::Classic25_5,
+                };
+                self.focus_state.update(
+                    FocusMessage::OpenWithTarget {
+                        title: format!("Bloco de foco ({minutes} min)"),
+                        task_id: None,
+                        preset,
+                    },
+                    now,
+                );
+                self.focus_state.update(FocusMessage::Start, now);
+                self.focus_state.fullscreen_active = false;
+            }
             HomeMessage::StartFocusForPin(pin_id) => {
                 let pin_title = match &self.home_state {
                     HomeLoadState::Ready(data) => data
@@ -791,6 +991,7 @@ impl EstudyApp {
             }
             HomeMessage::QuickCreateHabit => {
                 self.route = AppRoute::Habits;
+                self.habits_state.create_open = true;
             }
             HomeMessage::QuickCreateEvent => {
                 self.route = AppRoute::Calendar;
@@ -880,13 +1081,7 @@ impl EstudyApp {
         let nav_scroll = scrollable(nav_col.width(Length::Fill)).height(Length::Fill);
 
         let mascot_footer = self.view_sidebar_mascot_footer(expanded, theme);
-        let settings_item = self.sidebar_nav_item(
-            AppRoute::Settings,
-            IllustratedIcon::Settings,
-            None,
-            expanded,
-            theme,
-        );
+        let bottom_controls = self.view_sidebar_bottom_controls(expanded, theme);
 
         let col = column![
             header,
@@ -894,7 +1089,7 @@ impl EstudyApp {
             hairline_divider(theme),
             nav_scroll,
             mascot_footer,
-            settings_item,
+            bottom_controls,
         ]
         .spacing(SPACE_2)
         .width(Length::Fill)
@@ -993,10 +1188,21 @@ impl EstudyApp {
 
         let content: Element<'a, AppMessage> = if expanded {
             let mut line = row![
-                illustrated_svg(icon, 20.0),
+                container(text("").size(1))
+                    .width(Length::Fixed(3.0))
+                    .height(Length::Fixed(18.0))
+                    .style(move |_| container::Style {
+                        background: is_active.then(|| theme.accent.into()),
+                        border: Border {
+                            radius: RADIUS_PILL.into(),
+                            ..Border::default()
+                        },
+                        ..container::Style::default()
+                    }),
+                illustrated_svg_themed(icon, 20.0, theme),
                 shaped_text(route.label(), FONT_SIZE_MD, font, text_color),
             ]
-            .spacing(10.0)
+            .spacing(8.0)
             .align_y(Alignment::Center)
             .width(Length::Fill);
 
@@ -1005,7 +1211,7 @@ impl EstudyApp {
             }
             line.into()
         } else {
-            container(illustrated_svg(icon, 22.0))
+            container(illustrated_svg_themed(icon, 22.0, theme))
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
                 .width(Length::Fill)
@@ -1038,6 +1244,87 @@ impl EstudyApp {
             .into()
     }
 
+    fn view_sidebar_bottom_controls(
+        &self,
+        expanded: bool,
+        theme: EstudyTheme,
+    ) -> Element<'_, AppMessage> {
+        let mode_icon = match self.loadout.theme_mode {
+            ThemeMode::Light => Icon::Moon,
+            ThemeMode::Dark => Icon::Sun,
+        };
+        let settings_item = self.sidebar_nav_item(
+            AppRoute::Settings,
+            IllustratedIcon::Settings,
+            None,
+            expanded,
+            theme,
+        );
+
+        let today_btn: Element<'_, AppMessage> = if expanded {
+            button(
+                row![
+                    icon_svg(Icon::Clock, 16.0, theme.text_muted),
+                    shaped_text(
+                        "Timeline Hoje",
+                        FONT_SIZE_SM,
+                        FONT_SANS_MEDIUM,
+                        theme.text_muted
+                    ),
+                ]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
+            )
+            .on_press(AppMessage::ToggleTodayDrawer)
+            .width(Length::Fill)
+            .padding([6.0, 10.0])
+            .style(move |_, status| theme.subtle_button_style(status))
+            .into()
+        } else {
+            button(
+                container(icon_svg(Icon::Clock, 18.0, theme.text_muted))
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fixed(34.0)),
+            )
+            .on_press(AppMessage::ToggleTodayDrawer)
+            .width(Length::Fill)
+            .height(Length::Fixed(36.0))
+            .padding(0.0)
+            .style(move |_, status| theme.subtle_button_style(status))
+            .into()
+        };
+
+        let mode_btn = button(
+            container(icon_svg(mode_icon, 16.0, theme.text_muted))
+                .center_x(Length::Fixed(34.0))
+                .center_y(Length::Fixed(34.0)),
+        )
+        .on_press(AppMessage::ToggleThemeMode)
+        .width(if expanded {
+            Length::Fixed(36.0)
+        } else {
+            Length::Fill
+        })
+        .height(Length::Fixed(38.0))
+        .padding(0.0)
+        .style(move |_, status| theme.subtle_button_style(status));
+
+        if expanded {
+            column![
+                today_btn,
+                row![container(settings_item).width(Length::Fill), mode_btn,]
+                    .spacing(4.0)
+                    .align_y(Alignment::Center),
+            ]
+            .spacing(4.0)
+            .into()
+        } else {
+            column![today_btn, mode_btn, settings_item]
+                .spacing(4.0)
+                .into()
+        }
+    }
+
     fn view_sidebar_mascot_footer(
         &self,
         expanded: bool,
@@ -1046,7 +1333,7 @@ impl EstudyApp {
         if expanded {
             soft_surface(
                 row![
-                    illustrated_svg(IllustratedIcon::MascotMochi, 36.0),
+                    illustrated_svg_themed(IllustratedIcon::MascotMochi, 36.0, theme),
                     shaped_text(
                         self.mascot_contextual_message(),
                         FONT_SIZE_XS,
@@ -1065,9 +1352,13 @@ impl EstudyApp {
         } else {
             mouse_area(
                 button(
-                    container(illustrated_svg(IllustratedIcon::MascotMochi, 34.0))
-                        .center_x(Length::Fill)
-                        .center_y(Length::Fill),
+                    container(illustrated_svg_themed(
+                        IllustratedIcon::MascotMochi,
+                        34.0,
+                        theme,
+                    ))
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill),
                 )
                 .on_press(AppMessage::ToggleMascotBubble)
                 .width(Length::Fill)
@@ -1082,7 +1373,7 @@ impl EstudyApp {
     fn view_floating_mascot_bubble(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
         let bubble = container(
             row![
-                illustrated_svg(IllustratedIcon::MascotMochi, 28.0),
+                illustrated_svg_themed(IllustratedIcon::MascotMochi, 28.0, theme),
                 shaped_text(
                     self.mascot_contextual_message(),
                     FONT_SIZE_SM,
@@ -1115,11 +1406,12 @@ impl EstudyApp {
 
     fn view_floating_focus_pill(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
         let rem = self.focus_state.timer.remaining_seconds();
-        let title = self
+        let raw_title = self
             .focus_state
             .active_target_title
             .as_deref()
             .unwrap_or("Em foco");
+        let short_title = truncate_label(raw_title, 24);
 
         let pill = container(
             row![
@@ -1130,7 +1422,12 @@ impl EstudyApp {
                     FONT_MONO,
                     theme.text_primary,
                 ),
-                shaped_text(title, FONT_SIZE_SM, FONT_SANS_MEDIUM, theme.text_muted),
+                shaped_text(
+                    short_title,
+                    FONT_SIZE_SM,
+                    FONT_SANS_MEDIUM,
+                    theme.text_muted
+                ),
                 button(icon_svg(Icon::Pause, 14.0, theme.text_primary))
                     .on_press(AppMessage::Focus(FocusMessage::Pause))
                     .padding(4.0)
@@ -1148,7 +1445,7 @@ impl EstudyApp {
             .spacing(SPACE_2)
             .align_y(Alignment::Center),
         )
-        .padding([6.0, 12.0])
+        .padding([7.0, 14.0])
         .style(move |_| container::Style {
             background: Some(theme.card.into()),
             border: Border {
@@ -1163,8 +1460,76 @@ impl EstudyApp {
 
         container(pill)
             .width(Length::Fill)
-            .padding([SPACE_3, SPACE_5])
+            .height(Length::Fill)
+            .padding([SPACE_4, SPACE_5])
             .align_x(Alignment::End)
+            .align_y(Alignment::End)
+            .into()
+    }
+
+    fn view_status_toast<'a>(
+        &'a self,
+        message: &'a str,
+        theme: EstudyTheme,
+    ) -> Element<'a, AppMessage> {
+        let sidebar_w = if self.nav_sidebar_open {
+            SIDEBAR_WIDTH
+        } else {
+            SIDEBAR_COMPACT_WIDTH
+        };
+        let mut toast_row = row![
+            icon_svg(Icon::Info, 15.0, theme.accent),
+            shaped_text(message, FONT_SIZE_SM, FONT_SANS_MEDIUM, theme.text_primary),
+        ]
+        .spacing(SPACE_2)
+        .align_y(Alignment::Center);
+
+        if self.undo_action.is_some() {
+            toast_row = toast_row.push(
+                button(shaped_text(
+                    "Desfazer",
+                    FONT_SIZE_XS,
+                    FONT_SANS_SEMIBOLD,
+                    theme.accent,
+                ))
+                .on_press(AppMessage::UndoLastAction)
+                .padding([4.0, 10.0])
+                .style(move |_, status| theme.ghost_button_style(status)),
+            );
+        }
+
+        toast_row = toast_row.push(
+            button(icon_svg(Icon::X, 14.0, theme.text_muted))
+                .on_press(AppMessage::DismissBanner)
+                .padding(4.0)
+                .style(move |_, status| theme.subtle_button_style(status)),
+        );
+
+        let toast = container(toast_row)
+            .padding([8.0, 14.0])
+            .style(move |_| container::Style {
+                background: Some(theme.card.into()),
+                border: Border {
+                    color: theme.border_subtle,
+                    width: 1.0,
+                    radius: RADIUS_PILL.into(),
+                },
+                shadow: theme.floating_menu_style().shadow,
+                snap: true,
+                ..container::Style::default()
+            });
+
+        container(toast)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_x(Alignment::Start)
+            .align_y(Alignment::End)
+            .padding(iced::Padding {
+                top: 0.0,
+                right: SPACE_5,
+                bottom: SPACE_4,
+                left: sidebar_w + SPACE_5,
+            })
             .into()
     }
 
@@ -1242,38 +1607,33 @@ impl EstudyApp {
             let cat = CategoryColor::from_index(habit.color_index);
             let checked = habit.is_done_on(today);
             list = list.push(
-                button(
-                    row![
-                        icon_svg(
-                            if checked {
-                                Icon::CheckCircle2
-                            } else {
-                                Icon::CheckSquare
-                            },
-                            16.0,
-                            if checked {
-                                cat.solid(theme)
-                            } else {
-                                theme.text_muted
-                            },
-                        ),
-                        shaped_text(
-                            habit.title.as_str(),
-                            FONT_SIZE_MD,
-                            FONT_SANS_MEDIUM,
-                            theme.text_primary,
-                        ),
-                    ]
-                    .spacing(SPACE_2)
-                    .align_y(Alignment::Center),
-                )
-                .on_press(AppMessage::Habits(HabitsMessage::ToggleHabitDate {
-                    habit_id: habit.id.clone(),
-                    date: today,
-                }))
-                .width(Length::Fill)
-                .padding([8.0, 10.0])
-                .style(move |_, status| theme.subtle_button_style(status)),
+                row![
+                    radio_check_circle(
+                        checked,
+                        cat.solid(theme),
+                        20.0,
+                        AppMessage::Habits(HabitsMessage::ToggleHabitDate {
+                            habit_id: habit.id.clone(),
+                            date: today,
+                        }),
+                        theme,
+                    ),
+                    button(shaped_text(
+                        habit.title.as_str(),
+                        FONT_SIZE_MD,
+                        FONT_SANS_MEDIUM,
+                        theme.text_primary,
+                    ))
+                    .on_press(AppMessage::Habits(HabitsMessage::ToggleHabitDate {
+                        habit_id: habit.id.clone(),
+                        date: today,
+                    }))
+                    .width(Length::Fill)
+                    .padding([6.0, 8.0])
+                    .style(move |_, status| theme.subtle_button_style(status)),
+                ]
+                .spacing(SPACE_2)
+                .align_y(Alignment::Center),
             );
         }
 
@@ -1359,35 +1719,33 @@ impl EstudyApp {
     }
 
     fn view_theme_presets_row(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
-        let presets = [
-            (ThemePreset::OlivaOrganico, CategoryColor::Sage),
-            (ThemePreset::EstudyMenta, CategoryColor::Moss),
-            (ThemePreset::CyberMinimalist, CategoryColor::Slate),
-            (ThemePreset::SolarAmber, CategoryColor::Ochre),
-            (ThemePreset::VelvetSakura, CategoryColor::Coral),
-        ];
-
         let mut preset_row = row![].spacing(SPACE_3).width(Length::Fill);
-        for (preset, cat) in presets {
+        for preset in ThemePreset::ALL {
             let active = self.loadout.theme_preset == preset;
+            let p_theme = EstudyTheme::resolve(preset, self.loadout.theme_mode);
+            let swatches = row![
+                swatch_chip(p_theme.bg, theme.border_subtle),
+                swatch_chip(p_theme.panel, theme.border_subtle),
+                swatch_chip(p_theme.card, theme.border_subtle),
+                swatch_chip(p_theme.accent, theme.border_subtle),
+            ]
+            .spacing(4.0)
+            .align_y(Alignment::Center);
+
             preset_row = preset_row.push(
                 button(
                     column![
-                        row![
-                            color_dot(cat.solid(theme)),
-                            shaped_text(
-                                preset.label(),
-                                FONT_SIZE_MD,
-                                FONT_SANS_SEMIBOLD,
-                                if active {
-                                    theme.on_accent
-                                } else {
-                                    theme.text_primary
-                                },
-                            ),
-                        ]
-                        .spacing(SPACE_2)
-                        .align_y(Alignment::Center),
+                        swatches,
+                        shaped_text(
+                            preset.label(),
+                            FONT_SIZE_MD,
+                            FONT_SANS_SEMIBOLD,
+                            if active {
+                                theme.on_accent
+                            } else {
+                                theme.text_primary
+                            },
+                        ),
                         shaped_text(
                             if active { "Ativo" } else { "Aplicar" },
                             FONT_SIZE_XS,
@@ -1399,10 +1757,10 @@ impl EstudyApp {
                             },
                         ),
                     ]
-                    .spacing(4.0),
+                    .spacing(6.0),
                 )
                 .on_press(AppMessage::SelectThemePreset(preset))
-                .width(Length::FillPortion(1))
+                .width(Length::Fixed(164.0))
                 .padding([SPACE_3, SPACE_4])
                 .style(move |_, status| {
                     if active {
@@ -1413,7 +1771,7 @@ impl EstudyApp {
                 }),
             );
         }
-        preset_row.into()
+        preset_row.wrap().vertical_spacing(SPACE_3).into()
     }
 
     fn view_settings_screen(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
@@ -1430,38 +1788,42 @@ impl EstudyApp {
         let header = editorial_page_header(
             "ESTUDY  /  AJUSTES",
             "Ajustes",
-            "Aparência, temas e atalhos",
+            "Aparência, perfil e atalhos",
             None,
             theme,
         );
 
+        let appearance_card = card(
+            column![
+                section_header(Icon::Palette, "Temas WCAG AA", theme),
+                preset_row,
+                hairline_divider(theme),
+                button(
+                    row![
+                        icon_svg(mode_icon, 16.0, theme.text_primary),
+                        shaped_text(
+                            mode_label,
+                            FONT_SIZE_MD,
+                            FONT_SANS_MEDIUM,
+                            theme.text_primary,
+                        ),
+                    ]
+                    .spacing(SPACE_2)
+                    .align_y(Alignment::Center),
+                )
+                .on_press(AppMessage::ToggleThemeMode)
+                .padding([SPACE_2, SPACE_4])
+                .style(move |_, status| theme.ghost_button_style(status)),
+            ]
+            .spacing(SPACE_4),
+            theme,
+        )
+        .width(Length::Fill);
+
         let content = column![
             header,
-            card(
-                column![
-                    section_header(Icon::Palette, "Temas WCAG AA", theme),
-                    preset_row,
-                    hairline_divider(theme),
-                    button(
-                        row![
-                            icon_svg(mode_icon, 16.0, theme.text_primary),
-                            shaped_text(
-                                mode_label,
-                                FONT_SIZE_MD,
-                                FONT_SANS_MEDIUM,
-                                theme.text_primary,
-                            ),
-                        ]
-                        .spacing(SPACE_2)
-                        .align_y(Alignment::Center),
-                    )
-                    .on_press(AppMessage::ToggleThemeMode)
-                    .padding([SPACE_2, SPACE_4])
-                    .style(move |_, status| theme.ghost_button_style(status)),
-                ]
-                .spacing(SPACE_4),
-                theme,
-            ),
+            appearance_card,
+            self.view_settings_profile_card(theme),
             Self::view_settings_shortcuts_card(theme),
         ]
         .spacing(SPACE_4)
@@ -1474,7 +1836,82 @@ impl EstudyApp {
                 .center_x(Length::Fill)
                 .width(Length::Fill),
         )
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new().width(5).scroller_width(5),
+        ))
+        .style(move |_, status| theme.subtle_scrollbar_style(status))
         .height(Length::Fill)
+        .into()
+    }
+
+    fn view_settings_profile_card(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
+        const PRESETS: [(PomodoroPreset, &str); 3] = [
+            (PomodoroPreset::Classic25_5, "25 / 5 min"),
+            (PomodoroPreset::Deep50_10, "50 / 10 min"),
+            (PomodoroPreset::Sprint15_3, "15 / 3 min"),
+        ];
+
+        let name_row = row![
+            text_input("Seu nome na saudação...", &self.display_name_draft)
+                .on_input(AppMessage::DisplayNameChanged)
+                .on_submit(AppMessage::SaveDisplayName)
+                .padding([SPACE_2, SPACE_3])
+                .size(FONT_SIZE_BASE)
+                .width(Length::Fixed(260.0))
+                .style(move |_, status| theme.soft_input_style(status)),
+            button(shaped_text(
+                "Salvar nome",
+                FONT_SIZE_BASE,
+                FONT_SANS_MEDIUM,
+                theme.on_accent,
+            ))
+            .on_press(AppMessage::SaveDisplayName)
+            .padding([SPACE_2, SPACE_4])
+            .style(move |_, status| theme.primary_button_style(status)),
+        ]
+        .spacing(SPACE_2)
+        .align_y(Alignment::Center);
+
+        let preset_switch = segmented_switch(
+            &PRESETS,
+            self.focus_state.timer.preset,
+            AppMessage::SelectDefaultFocusPreset,
+            theme,
+        );
+
+        card(
+            column![
+                section_header(Icon::User, "Perfil & Ritmo de Foco", theme),
+                hairline_divider(theme),
+                row![
+                    shaped_text(
+                        "Nome de exibição",
+                        FONT_SIZE_MD,
+                        FONT_SANS_MEDIUM,
+                        theme.text_muted,
+                    )
+                    .width(Length::Fill),
+                    name_row,
+                ]
+                .spacing(SPACE_3)
+                .align_y(Alignment::Center),
+                row![
+                    shaped_text(
+                        "Bloco Pomodoro padrão",
+                        FONT_SIZE_MD,
+                        FONT_SANS_MEDIUM,
+                        theme.text_muted,
+                    )
+                    .width(Length::Fill),
+                    preset_switch,
+                ]
+                .spacing(SPACE_3)
+                .align_y(Alignment::Center),
+            ]
+            .spacing(SPACE_3),
+            theme,
+        )
+        .width(Length::Fill)
         .into()
     }
 
@@ -1482,12 +1919,33 @@ impl EstudyApp {
         card(
             column![
                 section_header(Icon::Command, "Atalhos e Fluxo Rápido", theme),
+                hairline_divider(theme),
                 shortcut_row(
                     "Ctrl+K",
-                    "Buscar ou criar rapidamente em qualquer tela",
+                    "Buscar tarefas, notas, hábitos ou executar comandos rápidos",
                     theme
                 ),
                 shortcut_row("Ctrl+B", "Expandir ou recolher a barra lateral", theme),
+                shortcut_row(
+                    "Ctrl+1..5",
+                    "Saltar entre Início, Tarefas, Hábitos, Segundo cérebro e Agenda",
+                    theme
+                ),
+                shortcut_row(
+                    "Ctrl+N",
+                    "Abrir modal de nova tarefa em qualquer tela",
+                    theme
+                ),
+                shortcut_row(
+                    "Ctrl+T",
+                    "Abrir ou fechar a gaveta vertical Timeline Hoje",
+                    theme
+                ),
+                shortcut_row(
+                    "Ctrl+D",
+                    "Alternar rapidamente entre Modo Claro e Escuro",
+                    theme
+                ),
                 shortcut_row(
                     "Clique direito",
                     "Abrir menu rápido na tarefa (status, prioridade, período, duplicar)",
@@ -1495,7 +1953,7 @@ impl EstudyApp {
                 ),
                 shortcut_row(
                     "Arrastar",
-                    "Mover tarefas entre Sem dia, dias da semana e períodos",
+                    "Mover tarefas entre Sem dia, dias da semana, períodos e Kanban",
                     theme
                 ),
                 shortcut_row("Esc", "Fechar uma camada aberta por vez", theme),
@@ -1503,11 +1961,19 @@ impl EstudyApp {
             .spacing(SPACE_3),
             theme,
         )
+        .width(Length::Fill)
         .into()
     }
 
     fn view_route_body(&self, theme: EstudyTheme) -> Element<'_, AppMessage> {
         let today = self.clock.now_utc().date_naive();
+        let sidebar_w = if self.nav_sidebar_open {
+            SIDEBAR_WIDTH
+        } else {
+            SIDEBAR_COMPACT_WIDTH
+        };
+        let content_width = (self.window_size.0 - sidebar_w).max(320.0);
+
         match self.route {
             AppRoute::Home => {
                 let base_home = view_home(
@@ -1515,9 +1981,11 @@ impl EstudyApp {
                     &self.projects_state,
                     &self.habits_state,
                     &self.second_brain_state,
-                    self.focus_state.today_focused_minutes,
+                    &self.calendar_state,
+                    &self.focus_state,
                     today,
                     self.greeting(),
+                    content_width,
                     theme,
                     AppMessage::Home,
                     AppMessage::Projects,
@@ -1550,19 +2018,30 @@ impl EstudyApp {
                     &self.projects_state,
                     today,
                     today_items,
+                    self.window_size,
                     theme,
                     AppMessage::Projects,
                 )
             }
-            AppRoute::Habits => view_habits(&self.habits_state, today, theme, AppMessage::Habits),
-            AppRoute::SecondBrain => {
-                view_second_brain(&self.second_brain_state, theme, AppMessage::SecondBrain)
-            }
+            AppRoute::Habits => view_habits(
+                &self.habits_state,
+                today,
+                content_width,
+                theme,
+                AppMessage::Habits,
+            ),
+            AppRoute::SecondBrain => view_second_brain(
+                &self.second_brain_state,
+                content_width,
+                theme,
+                AppMessage::SecondBrain,
+            ),
             AppRoute::Calendar => view_calendar(
                 &self.calendar_state,
                 &self.projects_state.projects,
                 &self.projects_state.tasks,
                 today,
+                content_width,
                 theme,
                 AppMessage::Calendar,
             ),
@@ -1576,6 +2055,31 @@ impl EstudyApp {
             AppRoute::Settings => self.view_settings_screen(theme),
             other => view_module_placeholder(other, theme),
         }
+    }
+}
+
+fn swatch_chip<'a>(color: Color, border_color: Color) -> Element<'a, AppMessage> {
+    container(text("").size(1))
+        .width(Length::Fixed(16.0))
+        .height(Length::Fixed(16.0))
+        .style(move |_| container::Style {
+            background: Some(color.into()),
+            border: Border {
+                color: border_color,
+                width: 1.0,
+                radius: RADIUS_PILL.into(),
+            },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+fn truncate_label(raw: &str, max_chars: usize) -> String {
+    if raw.chars().count() <= max_chars {
+        raw.to_string()
+    } else {
+        let head: String = raw.chars().take(max_chars.saturating_sub(1)).collect();
+        format!("{head}…")
     }
 }
 
@@ -1723,6 +2227,23 @@ fn map_shortcut(key: &Key, modifiers: Modifiers) -> Option<AppMessage> {
         }
         if ch.eq_ignore_ascii_case("b") {
             return Some(AppMessage::ToggleContextSidebar);
+        }
+        if ch.eq_ignore_ascii_case("n") {
+            return Some(AppMessage::Home(HomeMessage::QuickCreateTask));
+        }
+        if ch.eq_ignore_ascii_case("t") {
+            return Some(AppMessage::ToggleTodayDrawer);
+        }
+        if ch.eq_ignore_ascii_case("d") {
+            return Some(AppMessage::ToggleThemeMode);
+        }
+        match ch.as_str() {
+            "1" => return Some(AppMessage::Navigate(AppRoute::Home)),
+            "2" => return Some(AppMessage::Navigate(AppRoute::Projects)),
+            "3" => return Some(AppMessage::Navigate(AppRoute::Habits)),
+            "4" => return Some(AppMessage::Navigate(AppRoute::SecondBrain)),
+            "5" => return Some(AppMessage::Navigate(AppRoute::Calendar)),
+            _ => {}
         }
     }
     if matches!(key, Key::Named(keyboard::key::Named::Escape)) {

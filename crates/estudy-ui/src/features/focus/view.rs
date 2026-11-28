@@ -1,21 +1,21 @@
-//! Renderização do Pomodoro em `Canvas`, Modo Foco em tela cheia, dock DSP e captura rápida.
+//! Renderização do Pomodoro em `Canvas` com halo suave, Modo Foco em tela cheia, dock DSP e captura.
 
 use std::f32::consts::FRAC_PI_2;
 
 use estudy_domain::{DspTrack, FocusModality, FocusPhase, PomodoroPreset};
 use estudy_ui_kit::widgets::{
-    banner_toast, card, hairline_divider, icon_svg, kbd_hint, pill_chip, section_header,
-    segmented_switch, soft_surface, status_badge,
+    banner_toast, card, hairline_divider, icon_svg, illustrated_svg_themed, kbd_hint, pill_chip,
+    section_header, segmented_switch, soft_surface, status_badge,
 };
 use estudy_ui_kit::{
-    EstudyTheme, FONT_SIZE_BASE, FONT_SIZE_HERO_TIMER, FONT_SIZE_MD, Icon, SPACE_1, SPACE_2,
-    SPACE_3, SPACE_4, SPACE_6,
+    EstudyTheme, FONT_MONO, FONT_SIZE_BASE, FONT_SIZE_HERO_TIMER, FONT_SIZE_MD, Icon,
+    IllustratedIcon, SPACE_1, SPACE_2, SPACE_3, SPACE_4, SPACE_6,
 };
-use iced::widget::canvas::{self, Geometry, Path, Stroke};
+use iced::widget::canvas::{self, Geometry, LineCap, Path, Stroke};
 use iced::widget::{
     button, canvas as iced_canvas, column, container, row, slider, text, text_input,
 };
-use iced::{Alignment, Element, Length, Point, Rectangle, Renderer, Theme};
+use iced::{Alignment, Color, Element, Length, Point, Rectangle, Renderer, Theme};
 
 use super::state::{FocusMessage, FocusState};
 
@@ -105,10 +105,10 @@ fn view_focus_header<'a, Message: Clone + 'a>(
     .style(move |_, status| theme.subtle_button_style(status));
 
     row![
-        column![
-            section_header(Icon::Timer, target_title, theme),
-            row![
-                icon_svg(Icon::PawPrint, 14.0, theme.accent),
+        row![
+            illustrated_svg_themed(IllustratedIcon::MascotMochi, 34.0, theme),
+            column![
+                section_header(Icon::Timer, target_title, theme),
                 text(format!(
                     "{pet_label} · {} min focados hoje",
                     state.today_focused_minutes
@@ -116,10 +116,10 @@ fn view_focus_header<'a, Message: Clone + 'a>(
                 .size(FONT_SIZE_BASE)
                 .color(theme.text_muted),
             ]
-            .spacing(SPACE_1)
-            .align_y(Alignment::Center),
+            .spacing(2.0),
         ]
-        .spacing(SPACE_1)
+        .spacing(SPACE_2)
+        .align_y(Alignment::Center)
         .width(Length::Fill),
         preset_switch,
         exit_btn,
@@ -150,14 +150,16 @@ fn view_timer_ring<'a, Message: 'a>(
         is_break: state.timer.phase == FocusPhase::ShortBreak,
         theme,
     })
-    .width(Length::Fixed(268.0))
-    .height(Length::Fixed(268.0));
+    .width(Length::Fixed(276.0))
+    .height(Length::Fixed(276.0));
 
     let overlay_clock = container(
         column![
             text(format!("{minutes:02}:{seconds:02}"))
                 .size(FONT_SIZE_HERO_TIMER)
-                .color(theme.text_primary),
+                .font(FONT_MONO)
+                .color(theme.text_primary)
+                .shaping(text::Shaping::Advanced),
             status_badge(
                 phase_label,
                 if state.timer.phase == FocusPhase::ShortBreak {
@@ -171,14 +173,14 @@ fn view_timer_ring<'a, Message: 'a>(
         .spacing(SPACE_2)
         .align_x(Alignment::Center),
     )
-    .width(Length::Fixed(268.0))
-    .height(Length::Fixed(268.0))
-    .center_x(Length::Fixed(268.0))
-    .center_y(Length::Fixed(268.0));
+    .width(Length::Fixed(276.0))
+    .height(Length::Fixed(276.0))
+    .center_x(Length::Fixed(276.0))
+    .center_y(Length::Fixed(276.0));
 
     iced::widget::stack![ring_canvas, overlay_clock]
-        .width(Length::Fixed(268.0))
-        .height(Length::Fixed(268.0))
+        .width(Length::Fixed(276.0))
+        .height(Length::Fixed(276.0))
         .into()
 }
 
@@ -302,7 +304,8 @@ fn view_dsp_dock<'a, Message: Clone + 'a>(
     let vol_slider = slider(0..=100, state.volume_percent, move |val| {
         map_msg(FocusMessage::SetVolumePercent(val))
     })
-    .width(Length::Fixed(160.0));
+    .width(Length::Fixed(180.0))
+    .style(move |_, status| theme.slider_style(status));
 
     let volume_bar = row![
         button(icon_svg(mute_icon, 16.0, theme.accent))
@@ -312,6 +315,7 @@ fn view_dsp_dock<'a, Message: Clone + 'a>(
         vol_slider,
         text(format!("{}%", state.volume_percent))
             .size(FONT_SIZE_BASE)
+            .font(FONT_MONO)
             .color(theme.text_muted),
         container(status_badge("-16 LUFS DSP", theme.accent, theme))
             .align_x(Alignment::End)
@@ -324,7 +328,7 @@ fn view_dsp_dock<'a, Message: Clone + 'a>(
         column![
             section_header(Icon::Headphones, "Áudio Procedural de Foco", theme),
             hairline_divider(theme),
-            track_row,
+            track_row.wrap().vertical_spacing(SPACE_1),
             volume_bar,
         ]
         .spacing(SPACE_3),
@@ -454,7 +458,7 @@ impl<Message> canvas::Program<Message> for FocusRingProgram {
     ) -> Vec<Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         let center = Point::new(bounds.width * 0.5, bounds.height * 0.5);
-        let radius = (bounds.width.min(bounds.height) * 0.5) - 14.0;
+        let radius = (bounds.width.min(bounds.height) * 0.5) - 18.0;
 
         let track = Path::circle(center, radius);
         frame.stroke(
@@ -464,10 +468,37 @@ impl<Message> canvas::Program<Message> for FocusRingProgram {
                 .with_width(10.0),
         );
 
+        let ticks = Path::new(|builder| {
+            for step in 0..24 {
+                #[allow(clippy::cast_precision_loss)]
+                let angle = -FRAC_PI_2 + (step as f32 / 24.0) * std::f32::consts::TAU;
+                let inner_r = radius - 13.0;
+                let outer_r = radius - 9.0;
+                builder.move_to(Point::new(
+                    center.x + inner_r * angle.cos(),
+                    center.y + inner_r * angle.sin(),
+                ));
+                builder.line_to(Point::new(
+                    center.x + outer_r * angle.cos(),
+                    center.y + outer_r * angle.sin(),
+                ));
+            }
+        });
+        frame.stroke(
+            &ticks,
+            Stroke::default()
+                .with_color(Color {
+                    a: 0.35,
+                    ..self.theme.border_subtle
+                })
+                .with_width(1.2),
+        );
+
         let clamped = self.progress.clamp(0.0, 1.0);
         if clamped > 0.001 {
             let start = iced::Radians(-FRAC_PI_2);
-            let end = iced::Radians(-FRAC_PI_2 + clamped * std::f32::consts::TAU);
+            let end_angle = -FRAC_PI_2 + clamped * std::f32::consts::TAU;
+            let end = iced::Radians(end_angle);
             let arc = Path::new(|builder| {
                 builder.arc(canvas::path::Arc {
                     center,
@@ -481,13 +512,30 @@ impl<Message> canvas::Program<Message> for FocusRingProgram {
             } else {
                 self.theme.accent
             };
+
+            frame.stroke(
+                &arc,
+                Stroke::default()
+                    .with_color(Color {
+                        a: 0.18,
+                        ..active_color
+                    })
+                    .with_width(18.0)
+                    .with_line_cap(LineCap::Round),
+            );
             frame.stroke(
                 &arc,
                 Stroke::default()
                     .with_color(active_color)
                     .with_width(10.0)
-                    .with_line_cap(canvas::LineCap::Round),
+                    .with_line_cap(LineCap::Round),
             );
+
+            let tip = Point::new(
+                center.x + radius * end_angle.cos(),
+                center.y + radius * end_angle.sin(),
+            );
+            frame.fill(&Path::circle(tip, 5.5), active_color);
         }
 
         vec![frame.into_geometry()]

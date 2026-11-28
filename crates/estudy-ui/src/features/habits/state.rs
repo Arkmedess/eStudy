@@ -24,8 +24,14 @@ pub enum HabitsMessage {
     NewSubtitleChanged(String),
     /// Cria um novo hábito na lista.
     CreateHabit,
+    /// Abre ou fecha o formulário inline de criação de hábito.
+    ToggleCreateForm,
+    /// Seleciona o índice de cor para o novo hábito.
+    NewColorSelected(usize),
     /// Remove um hábito da lista.
     RemoveHabit(EntityId),
+    /// Restaura um hábito recém-excluído (Desfazer).
+    RestoreHabit(Habit),
 }
 
 /// Estado completo da fatia Hábitos.
@@ -43,6 +49,10 @@ pub struct HabitsState {
     pub new_title: String,
     /// Texto temporário para descrição/meta de novo hábito.
     pub new_subtitle: String,
+    /// Indica se o formulário inline de novo hábito está aberto no rodapé da grade.
+    pub create_open: bool,
+    /// Índice de cor (`0..7`) selecionado para o novo hábito.
+    pub new_color_index: usize,
     dirty_habit_ids: BTreeSet<EntityId>,
     deleted_habit_ids: BTreeSet<EntityId>,
 }
@@ -113,6 +123,8 @@ impl HabitsState {
             view_month: today.month(),
             new_title: String::new(),
             new_subtitle: String::new(),
+            create_open: false,
+            new_color_index: 5,
             dirty_habit_ids: BTreeSet::new(),
             deleted_habit_ids: BTreeSet::new(),
         }
@@ -160,6 +172,17 @@ impl HabitsState {
             }
             HabitsMessage::NewTitleChanged(val) => self.new_title = val,
             HabitsMessage::NewSubtitleChanged(val) => self.new_subtitle = val,
+            HabitsMessage::ToggleCreateForm => {
+                self.create_open = !self.create_open;
+                if self.create_open {
+                    self.new_title.clear();
+                    self.new_subtitle.clear();
+                    self.new_color_index = self.habits.len() % 7;
+                }
+            }
+            HabitsMessage::NewColorSelected(idx) => {
+                self.new_color_index = idx % 7;
+            }
             HabitsMessage::CreateHabit => {
                 let title = self.new_title.trim().to_string();
                 if title.is_empty() {
@@ -171,7 +194,7 @@ impl HabitsState {
                     self.new_subtitle.trim().to_string()
                 };
                 let new_id = EntityId::new_v7();
-                let color_index = self.habits.len();
+                let color_index = self.new_color_index;
                 self.habits.push(Habit {
                     id: new_id.clone(),
                     title,
@@ -183,11 +206,21 @@ impl HabitsState {
                 self.dirty_habit_ids.insert(new_id);
                 self.new_title.clear();
                 self.new_subtitle.clear();
+                self.create_open = false;
+                self.new_color_index = (self.new_color_index + 1) % 7;
             }
             HabitsMessage::RemoveHabit(id) => {
                 self.habits.retain(|h| h.id != id);
                 self.dirty_habit_ids.remove(&id);
                 self.deleted_habit_ids.insert(id);
+            }
+            HabitsMessage::RestoreHabit(habit) => {
+                let id = habit.id.clone();
+                self.deleted_habit_ids.remove(&id);
+                if !self.habits.iter().any(|h| h.id == id) {
+                    self.habits.push(habit);
+                }
+                self.dirty_habit_ids.insert(id);
             }
         }
     }

@@ -3,8 +3,9 @@
 use std::sync::Arc;
 
 use chrono::{Duration, TimeZone, Utc};
-use estudy_domain::{FixedClock, TaskPriority, TaskStatus, TaskTurn};
+use estudy_domain::{FixedClock, NoteKind, TaskPriority, TaskStatus, TaskTurn};
 use estudy_ui::command_palette::{AppRoute, PaletteMessage};
+use estudy_ui::features::calendar::CalendarMessage;
 use estudy_ui::features::home::{HomeDashboardData, HomeLoadState, HomeMessage};
 use estudy_ui::features::projects::{DragTarget, ProjectsMessage, TasksViewMode};
 use estudy_ui::features::second_brain::SecondBrainMessage;
@@ -277,4 +278,191 @@ fn uf07_should_close_interactive_layers_one_at_a_time_on_escape() {
 
     app.update(AppMessage::CloseOverlays);
     assert!(app.projects_state.day_peek_date.is_none());
+}
+
+/// UF-08: Criar novo projeto na UI, filtrar tarefas por ele e rastrear dirty para `SQLite`.
+#[test]
+fn uf08_should_create_new_project_filter_by_it_and_mark_dirty() {
+    let mut app = make_app();
+    let _ = app.projects_state.take_dirty();
+    let initial_projects = app.projects_state.projects.len();
+
+    app.update(AppMessage::Navigate(AppRoute::Projects));
+    app.update(AppMessage::Projects(
+        ProjectsMessage::ToggleCreateProjectModal,
+    ));
+    assert!(app.projects_state.create_project_modal_open);
+
+    app.update(AppMessage::Projects(
+        ProjectsMessage::NewProjectTitleChanged("Pesquisa Rust".to_string()),
+    ));
+    app.update(AppMessage::Projects(
+        ProjectsMessage::NewProjectColorSelected(4),
+    ));
+    app.update(AppMessage::Projects(ProjectsMessage::CreateProject));
+
+    assert!(!app.projects_state.create_project_modal_open);
+    assert_eq!(app.projects_state.projects.len(), initial_projects + 1);
+    let created = app.projects_state.projects.last();
+    assert!(created.is_some());
+    let Some(created) = created else {
+        return;
+    };
+    assert_eq!(created.title, "Pesquisa Rust");
+    let created_id = created.id.clone();
+    assert_eq!(
+        app.projects_state.selected_project_id,
+        Some(created_id.clone())
+    );
+
+    let (dirty_projects, _) = app.projects_state.take_dirty();
+    assert_eq!(dirty_projects, vec![created_id]);
+}
+
+/// UF-09: Clicar em dia na Agenda abre o Card do Dia, edita/exclui evento e Desfazer restaura o evento.
+#[test]
+fn uf09_should_open_agenda_day_peek_edit_delete_and_undo_event() {
+    let mut app = make_app();
+    let today = fixed_now().date_naive();
+    app.update(AppMessage::Navigate(AppRoute::Calendar));
+
+    app.update(AppMessage::Calendar(CalendarMessage::OpenDayPeek(today)));
+    assert!(app.calendar_state.day_peek_open);
+    assert_eq!(app.calendar_state.cursor_date, today);
+
+    let event_id = app.calendar_state.events[0].id.clone();
+    app.update(AppMessage::Calendar(CalendarMessage::EditEvent(
+        event_id.clone(),
+    )));
+    assert!(app.calendar_state.create_draft.open);
+    app.update(AppMessage::Calendar(CalendarMessage::NewTitleChanged(
+        "Revisão Atualizada".to_string(),
+    )));
+    app.update(AppMessage::Calendar(CalendarMessage::CreateEvent));
+    assert!(!app.calendar_state.create_draft.open);
+    assert_eq!(app.calendar_state.events[0].title, "Revisão Atualizada");
+
+    let count_before = app.calendar_state.events.len();
+    app.update(AppMessage::Calendar(CalendarMessage::DeleteEvent(event_id)));
+    assert_eq!(app.calendar_state.events.len(), count_before - 1);
+    assert!(app.undo_action.is_some());
+
+    app.update(AppMessage::UndoLastAction);
+    assert_eq!(app.calendar_state.events.len(), count_before);
+    assert!(app.undo_action.is_none());
+}
+
+/// UF-10: Excluir tarefa permite Desfazer e Drag & Drop respeita threshold de 6px sem bloquear clique.
+#[test]
+fn uf10_should_undo_deleted_task_and_respect_drag_threshold() {
+    let mut app = make_app();
+    let task_id = app.projects_state.tasks[0].id.clone();
+    let initial_len = app.projects_state.tasks.len();
+
+    // Movimento < 6px não dispara drag
+    app.update(AppMessage::Projects(ProjectsMessage::CursorMoved(
+        100.0, 100.0,
+    )));
+    app.update(AppMessage::Projects(ProjectsMessage::PointerDownTask(
+        task_id.clone(),
+    )));
+    app.update(AppMessage::Projects(ProjectsMessage::CursorMoved(
+        103.0, 102.0,
+    )));
+    assert!(app.projects_state.dragging_task_id.is_none());
+
+    // Movimento >= 6px ativa drag real
+    app.update(AppMessage::Projects(ProjectsMessage::CursorMoved(
+        112.0, 108.0,
+    )));
+    assert_eq!(app.projects_state.dragging_task_id, Some(task_id.clone()));
+    app.update(AppMessage::Projects(ProjectsMessage::DropTask));
+    assert!(app.projects_state.dragging_task_id.is_none());
+    assert!(app.projects_state.pending_drag_task.is_none());
+
+    // Excluir tarefa e restaurar via Desfazer
+    app.update(AppMessage::Projects(ProjectsMessage::DeleteTask(
+        task_id.clone(),
+    )));
+    assert_eq!(app.projects_state.tasks.len(), initial_len - 1);
+    assert!(app.undo_action.is_some());
+
+    app.update(AppMessage::UndoLastAction);
+    assert_eq!(app.projects_state.tasks.len(), initial_len);
+    assert!(app.projects_state.tasks.iter().any(|t| t.id == task_id));
+}
+
+/// UF-11: Segundo Cérebro remove tag, edita URL de Link e Ctrl+K busca notas e hábitos.
+#[test]
+fn uf11_should_manage_tags_and_url_in_second_brain_and_search_in_palette() {
+    let mut app = make_app();
+    app.update(AppMessage::Navigate(AppRoute::SecondBrain));
+
+    let link_note_opt = app
+        .second_brain_state
+        .notes
+        .iter()
+        .find(|n| n.kind == NoteKind::Link)
+        .map(|n| n.id.clone());
+    assert!(link_note_opt.is_some());
+    let Some(link_note_id) = link_note_opt else {
+        return;
+    };
+
+    app.update(AppMessage::SecondBrain(SecondBrainMessage::SelectNote(
+        link_note_id,
+    )));
+    app.update(AppMessage::SecondBrain(
+        SecondBrainMessage::SourceUrlChanged("https://iced.rs".to_string()),
+    ));
+    app.update(AppMessage::SecondBrain(SecondBrainMessage::RemoveTag(
+        "iced".to_string(),
+    )));
+
+    let selected = app.second_brain_state.selected_note();
+    assert!(selected.is_some());
+    let Some(selected) = selected else {
+        return;
+    };
+    assert_eq!(selected.source_url.as_deref(), Some("https://iced.rs"));
+    assert!(!selected.tags.iter().any(|t| t == "iced"));
+
+    // Ctrl+K indexa notas e hábitos
+    app.update(AppMessage::Palette(PaletteMessage::Toggle));
+    app.update(AppMessage::Palette(PaletteMessage::QueryChanged(
+        "Revisão Espaçada".to_string(),
+    )));
+    let hits = app.palette.filtered_commands();
+    assert!(hits.iter().any(|c| c.id.starts_with("note:")));
+    assert!(hits.iter().any(|c| c.id.starts_with("habit:")));
+}
+
+/// UF-12: Redimensionar janela atualiza layout responsivo, editar nome atualiza Home e Esc fecha camadas.
+#[test]
+fn uf12_should_track_window_resize_update_profile_name_and_close_new_layers_with_esc() {
+    let mut app = make_app();
+    app.update(AppMessage::WindowResized(948.0, 1064.0));
+    assert!((app.window_size.0 - 948.0).abs() < f32::EPSILON);
+
+    app.update(AppMessage::DisplayNameChanged("Karolayne".to_string()));
+    app.update(AppMessage::SaveDisplayName);
+    if let HomeLoadState::Ready(data) = &app.home_state {
+        assert_eq!(data.profile.display_name, "Karolayne");
+    }
+
+    app.update(AppMessage::Projects(
+        ProjectsMessage::ToggleCreateProjectModal,
+    ));
+    app.update(AppMessage::Calendar(CalendarMessage::OpenDayPeek(
+        fixed_now().date_naive(),
+    )));
+    assert!(app.projects_state.create_project_modal_open);
+    assert!(app.calendar_state.day_peek_open);
+
+    app.update(AppMessage::CloseOverlays);
+    assert!(!app.projects_state.create_project_modal_open);
+    assert!(app.calendar_state.day_peek_open);
+
+    app.update(AppMessage::CloseOverlays);
+    assert!(!app.calendar_state.day_peek_open);
 }

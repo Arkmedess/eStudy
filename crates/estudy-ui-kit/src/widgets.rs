@@ -1,8 +1,14 @@
 //! Primitivos reutilizáveis do Design System em `Iced`.
 
+use iced::border;
+use iced::widget::canvas::{self, Canvas, Geometry, LineCap, LineDash, Path, Stroke};
 use iced::widget::text::{LineHeight, Shaping};
-use iced::widget::{button, column, container, progress_bar, row, svg, text};
-use iced::{Alignment, Border, Color, Element, Font, Length};
+use iced::widget::{
+    Stack, button, column, container, progress_bar, rich_text, row, span, svg, text,
+};
+use iced::{
+    Alignment, Border, Color, Element, Font, Length, Point, Rectangle, Renderer, Size, Theme,
+};
 
 use crate::fonts::{
     FONT_MONO, FONT_SANS, FONT_SANS_MEDIUM, FONT_SANS_SEMIBOLD, FONT_SERIF, FONT_SERIF_ITALIC,
@@ -60,6 +66,169 @@ pub fn illustrated_svg<'a, Message: 'a>(icon: IllustratedIcon, size: f32) -> Ele
     svg(icon.cached_handle())
         .width(Length::Fixed(snapped))
         .height(Length::Fixed(snapped))
+        .into()
+}
+
+/// Renderiza um ícone SVG ilustrado adaptado automaticamente ao tema Claro/Escuro ativo.
+#[must_use]
+pub fn illustrated_svg_themed<'a, Message: 'a>(
+    icon: IllustratedIcon,
+    size: f32,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    let snapped = size.round().max(16.0);
+    svg(icon.cached_handle_for_mode(theme.mode))
+        .width(Length::Fixed(snapped))
+        .height(Length::Fixed(snapped))
+        .into()
+}
+
+/// Texto com traço horizontal real (`strikethrough`) e kerning OpenType para itens concluídos.
+pub fn strikethrough_text<'a, Message: 'a>(
+    content: impl Into<String>,
+    size: f32,
+    font: Font,
+    color: Color,
+) -> Element<'a, Message> {
+    rich_text::<(), Message, Theme, Renderer>([span(content.into())
+        .font(font)
+        .size(size)
+        .color(color)
+        .strikethrough(true)])
+    .line_height(LineHeight::Relative(1.38))
+    .into()
+}
+
+/// Botão circular tátil (`○ -> ✓`) sem anel duplo: vazio em repouso e preenchido com `Icon::Check` quando marcado.
+pub fn radio_check_circle<'a, Message: Clone + 'a>(
+    checked: bool,
+    tint: Color,
+    size: f32,
+    on_press: Message,
+    theme: EstudyTheme,
+) -> Element<'a, Message> {
+    let snapped = size.round().max(18.0);
+    let check_size = (snapped * 0.56).round().max(11.0);
+    let inner: Element<'a, Message> = if checked {
+        container(icon_svg(Icon::Check, check_size, theme.on_accent))
+            .width(Length::Fixed(snapped))
+            .height(Length::Fixed(snapped))
+            .center_x(Length::Fixed(snapped))
+            .center_y(Length::Fixed(snapped))
+            .into()
+    } else {
+        container(text("").size(1))
+            .width(Length::Fixed(snapped))
+            .height(Length::Fixed(snapped))
+            .into()
+    };
+
+    button(inner)
+        .on_press(on_press)
+        .width(Length::Fixed(snapped))
+        .height(Length::Fixed(snapped))
+        .padding(0.0)
+        .style(move |_, status| {
+            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            let bg = if checked {
+                Some(
+                    Color {
+                        a: if hovered { 0.88 } else { 1.0 },
+                        ..tint
+                    }
+                    .into(),
+                )
+            } else if hovered {
+                Some(Color { a: 0.14, ..tint }.into())
+            } else {
+                Some(Color::TRANSPARENT.into())
+            };
+            let border_color = if checked || hovered {
+                tint
+            } else {
+                Color {
+                    a: 0.45,
+                    ..theme.text_muted
+                }
+            };
+            button::Style {
+                background: bg,
+                text_color: theme.on_accent,
+                border: Border {
+                    color: border_color,
+                    width: 1.5,
+                    radius: RADIUS_PILL.into(),
+                },
+                ..button::Style::default()
+            }
+        })
+        .into()
+}
+
+struct DashedFrameProgram {
+    stroke_color: Color,
+    fill_color: Option<Color>,
+    radius: f32,
+}
+
+impl<Message> canvas::Program<Message> for DashedFrameProgram {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let rect = Path::rounded_rectangle(
+            Point::new(1.0, 1.0),
+            Size::new(
+                (bounds.width - 2.0).max(1.0),
+                (bounds.height - 2.0).max(1.0),
+            ),
+            border::Radius::from(self.radius),
+        );
+        if let Some(fill) = self.fill_color {
+            frame.fill(&rect, fill);
+        }
+        frame.stroke(
+            &rect,
+            Stroke {
+                line_dash: LineDash {
+                    segments: &[5.0, 4.0],
+                    offset: 0,
+                },
+                line_cap: LineCap::Round,
+                ..Stroke::default()
+                    .with_color(self.stroke_color)
+                    .with_width(1.25)
+            },
+        );
+        vec![frame.into_geometry()]
+    }
+}
+
+/// Envolve o conteúdo com uma moldura tracejada desenhada em `Canvas` leve sem distorcer o tamanho intrínseco.
+pub fn dashed_frame<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+    stroke_color: Color,
+    fill_color: Option<Color>,
+    radius: f32,
+) -> Element<'a, Message> {
+    Stack::new()
+        .push(content.into())
+        .push_under(
+            Canvas::new(DashedFrameProgram {
+                stroke_color,
+                fill_color,
+                radius,
+            })
+            .width(Length::Fill)
+            .height(Length::Fill),
+        )
         .into()
 }
 
@@ -501,22 +670,24 @@ pub fn editorial_page_header<'a, Message: 'a>(
         .padding([0.0, 0.0]),
     ]
     .spacing(SPACE_3)
-    .align_y(Alignment::End);
+    .align_y(Alignment::End)
+    .wrap();
 
-    let left = column![crumb, title_row].spacing(4.0);
+    let left = column![crumb, title_row].spacing(4.0).width(Length::Fill);
 
     if let Some(action) = right_action {
         row![
             left,
             container(action)
                 .align_x(Alignment::End)
-                .width(Length::Fill),
+                .width(Length::Shrink),
         ]
+        .spacing(SPACE_3)
         .align_y(Alignment::End)
         .width(Length::Fill)
         .into()
     } else {
-        left.width(Length::Fill).into()
+        left.into()
     }
 }
 
