@@ -2,7 +2,7 @@
 
 Aplicativo desktop local-first de produtividade pessoal em **Rust**, reunindo **Início Pessoal, Tarefas (Semana por Períodos, Calendário e Kanban), Hábitos, Segundo Cérebro, Agenda, Estudos, Estante de Leituras, Foco/Áudio e Gamificação leve** em um único binário nativo com memória privada alvo abaixo de **45 MiB (`RssAnon`)** e aceleração **`wgpu` (`sRGB`)** ativa por padrão.
 
-> **Status atual:** `v0.6.2` — Redesign editorial completo com tipografia estática (`Newsreader` Regular/Medium/Italic + `DM Sans` + `JetBrains Mono` via `Shaping::Advanced`), ícones ilustrados coloridos (`IllustratedIcon` + mascote **Mochi**) e traço limpo `1.75px`, janela limpa sem Topbar global nem 2ª sidebar, manipulação direta nos cartões (check `○ -> ✓`, status em 1 clique, **Drag & Drop** entre `SEM DIA`/dias/períodos e **Menu de Contexto no clique direito**), modais multi-linha reais (`text_editor`) e persistência **SQLite v2**.
+> **Status atual:** `v0.6.3` — Redesign editorial polido e responsivo (`1360×840` e `950×960`), ícones ilustrados com contorno adaptado ao Modo Escuro, visão semanal de Tarefas em 7 colunas roláveis com criação de projetos e arraste acima de `6px`, ações diretas na Agenda (*Card do Dia* e `Lista` mensal), Hábitos, Segundo Cérebro, Ajuste de perfil/foco, aviso `Desfazer`, servidor MCP de captura visual e persistência **SQLite v2** (`RssAnon ~30,1 MiB`).
 
 ---
 
@@ -41,9 +41,9 @@ bash scripts/bench_and_validate.sh
 - `crates/estudy-domain`: regras puras de negócio (projetos, tarefas, calendário recorrente, janelas livres), identificadores cronológicos (`UUIDv7`), relógio virtual (`ClockPort`), eventos pós-commit e cadeia HMAC-SHA256 da carteira.
 - `crates/estudy-storage`: diretórios padrão do sistema (`XDG`/`directories` com `--data-dir` e `ESTUDY_DATA_DIR`), SQLite em modo WAL, schema relacional v1 com `FTS5`, backup pré-migração, repositórios e snapshot limpo para nuvem.
 - `crates/estudy-audio`: motor procedural DSP lock-free (`cpal` com fallback silencioso) sintetizando 5 faixas de foco em `-16 LUFS` sem buffers em RAM.
-- `crates/estudy-ui-kit`: Design System em `Iced` (`0.14.0`) com 9 fontes estáticas OFL (`Shaping::Advanced`), 5 presets em modo Claro/Escuro validados em contraste WCAG 2.2 AA, 17 ícones ilustrados multi-cor (`IllustratedIcon`) + 87 ícones de linha `1.75px`, 7 molduras, `HeatmapGrid` anual e primitivos suaves.
-- `crates/estudy-ui`: interface MVU com barra lateral única (`216px` / `58px`), `Ctrl+K`, Home editorial, Tarefas (`Semana | Calendário | Kanban` com Drag & Drop, menu no cursor e modal multi-linha), Hábitos, Segundo Cérebro, Agenda e Modo Foco.
-- `apps/estudy-desktop`: binário principal com aceleração GPU `wgpu` por padrão (`RssAnon ~30 MiB`), persistência SQLite v2, escrita seletiva (*dirty tracking* + *soft delete*) e logs diários em JSON.
+- `crates/estudy-ui-kit`: Design System em `Iced` (`0.14.0`) com 9 fontes estáticas OFL (`Shaping::Advanced`), 5 presets em modo Claro/Escuro validados em contraste WCAG 2.2 AA, 17 ícones ilustrados multi-cor com variante para Modo Escuro (`illustrated_svg_themed`) + 89 ícones de linha `1.75px`, curva Bézier no `SparklineCanvas`, `HeatmapGrid` anual e primitivos suaves.
+- `crates/estudy-ui`: interface MVU com barra lateral única (`216px` / `58px`), `Ctrl+K`, Home editorial, Tarefas (`Semana` 7 colunas | `Calendário` | `Kanban` com criação de projetos, Drag & Drop `>= 6px`, menu no cursor e modal multi-linha), Hábitos, Segundo Cérebro, Agenda (`Calendário` + `Lista` + *Card do Dia*), Modo Foco e Ajustes com perfil/bloco padrão.
+- `apps/estudy-desktop`: binário principal com aceleração GPU `wgpu` por padrão (`RssAnon ~30 MiB`), persistência SQLite v2, escrita seletiva (*dirty tracking* + *soft delete*), captura de telas via `--screenshot` / `--subview` (usada por [scripts/estudy_ui_mcp.py](./scripts/estudy_ui_mcp.py)) e logs diários em JSON.
 - `apps/estudy-preview`: sandbox visual com dados de exemplo para testar layouts, temas e ícones ilustrados isoladamente.
 
 Os próximos ciclos entregam Estudos e Estante (`v0.7.0`), servidor MCP nativo e Jardim/Pets/Loja (`v0.8.0`). Veja o plano completo em [ROADMAP.md](./ROADMAP.md) e o guia visual em [DESIGN.md](./DESIGN.md).

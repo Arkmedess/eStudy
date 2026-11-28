@@ -47,6 +47,11 @@ Plano incremental de entregas do **eStudy**. Cada marco entrega um conjunto func
   - Aceleração GPU `wgpu` (`sRGB`) por padrão (`RssAnon ~30,1 MiB`, mantendo feature `cpu` opcional), remoção da Topbar global e da segunda barra lateral contextual, e pílula flutuante de Pomodoro visível só com o timer rodando.
   - `Tarefas` direto em `[ Semana | Calendário | Kanban ]` com bandeja `SEM DIA`, período `Qualquer hora`, check e giro de status em 1 clique no cartão, Drag & Drop entre dias/períodos, menu de contexto no cursor, modais multi-linha reais (`text_editor`) em Tarefas e Segundo Cérebro, Card do Dia e `soft_delete_task` no SQLite.
 
+- **v0.6.3 — Polimento Visual, Responsividade, Modo Escuro, Usabilidade e MCP de Captura** *(Concluído)*
+  - Captura de telas por linha de comando (`--screenshot` / `--subview`) e servidor MCP visual (`scripts/estudy_ui_mcp.py`) para validar janelas amplas (`1360×840`), estreitas (`950×960`) e modais sem recorte do compositor.
+  - Adaptação automática dos ícones ilustrados e do hero ao Modo Escuro, gráfico de Constância com curva Bézier suave, círculo de check limpo sem anel duplo, pílula flutuante no canto inferior direito e toast `Desfazer` para exclusões.
+  - Grade semanal de 7 colunas roláveis em Tarefas, criação de projetos e arraste acima de `6px`, Card do Dia clicável com edição/exclusão e `Lista` mensal na Agenda, além de edição de perfil/Pomodoro padrão em Ajustes e busca global `Ctrl+K` cobrindo notas e hábitos.
+
 - **v0.7.0 — Módulo de Estudos Completo e Estante de Leituras**
   - Ciclo contínuo de matérias com "Matéria da Vez", revisões espaçadas (`1/7/14/30/60d` e FSRS), flashcards *Active Recall*, Caderno de Erros e gráficos analíticos em `Canvas`.
   - Estante de Leituras com prateleiras customizáveis, sorteio *TBR Picker*, *Reader Companion* (`+5`/`+10` páginas, citações, estrelas) e capas da Open Library.

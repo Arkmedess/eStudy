@@ -8,6 +8,18 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
+## [0.6.3] - 2026-11-28
+
+### Adicionado
+- **Captura de Telas via CLI e Servidor MCP Visual** (`apps/estudy-desktop/src/screenshot_cli.rs`, `scripts/estudy_ui_mcp.py`): flags `--screenshot` e `--subview` (`week`, `calendar`, `kanban`, `list`, `task-modal`, `day-peek`, `note-modal`, `today-drawer`, `palette`, `focus-running`) com dimensões fixas sob demanda para inspecionar cada tela e modal em `1360×840` e `950×960`.
+- **Ação `Desfazer` para Exclusões e Novos Fluxos Diretos** (`crates/estudy-ui/`): botão `Desfazer` no canto inferior esquerdo após excluir tarefa, hábito, nota ou compromisso; criação de projetos direto na interface (`+ Projeto`); edição do nome de exibição e do bloco Pomodoro padrão em **Ajustes** (`Perfil & Ritmo de Foco`); inclusão de notas e hábitos na busca `Ctrl+K`; e exclusão lógica de eventos da Agenda no SQLite (`soft_delete_event`).
+
+### Aprimorado
+- **Polimento Visual, Modo Escuro e Responsividade**: contorno dos 17 `IllustratedIcon` adaptado para Modo Escuro via `illustrated_svg_themed`, paisagem do Hero integrada sem caixa de fundo, gráfico de Constância com curva Bézier e preenchimento em gradiente vertical, `89` ícones monoline (`Icon::Check` e `Icon::Circle` adicionados), círculos de check limpos sem anel duplo (`radio_check_circle`), molduras tracejadas (`dashed_frame`), scrollbars sutis de `5px` e os 3 cartões inferiores da Home alinhados pela base em largura padrão.
+- **Tarefário, Agenda, Hábitos, Segundo Cérebro e Foco Sem Cortes**: visão `Semana` com 7 colunas completas roláveis horizontalmente (`248px`), limiar de `6px` antes de iniciar arraste para preservar cliques, pílula flutuante do timer movida para o canto inferior direito (oculta na tela Foco), Card do Dia clicável com edição/exclusão e `Lista` mensal na Agenda, cartões do Segundo Cérebro adaptativos em 2/3/4 colunas com tags removíveis e URL em `Link`, e validação em `usability_flows.rs` ampliada para 12 jornadas (`UF-01..UF-12`).
+
+---
+
 ## [0.6.2] - 2026-11-26
 
 ### Adicionado
@@ -149,7 +161,8 @@ Todas as alterações relevantes do **eStudy** são documentadas neste arquivo s
 
 ---
 
-[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/Arkmedess/eStudy/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/Arkmedess/eStudy/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/Arkmedess/eStudy/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Arkmedess/eStudy/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Arkmedess/eStudy/compare/v0.5.0...v0.6.0
