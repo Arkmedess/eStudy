@@ -15,6 +15,7 @@ estudy-storage = { path = "../../crates/estudy-storage" }
 estudy-ui = { path = "../../crates/estudy-ui" }
 estudy-ui-kit = { path = "../../crates/estudy-ui-kit" }
 iced.workspace = true
+png = "0.17.16"
 rusqlite.workspace = true
 tracing.workspace = true
 tracing-appender.workspace = true

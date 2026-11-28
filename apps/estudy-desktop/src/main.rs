@@ -1,8 +1,10 @@
 //! Binário desktop principal do **eStudy** (Composition Root).
 
+mod screenshot_cli;
+
 use chrono::{SecondsFormat, Utc};
 use estudy_audio::AudioController;
-use estudy_domain::{EntityId, SystemClock};
+use estudy_domain::{CalendarViewMode, EntityId, PomodoroPreset, SystemClock, TaskTurn};
 use estudy_storage::{
     AppPaths, SearchEntityKind, SqliteCalendarRepository, SqliteFocusRepository,
     SqliteHabitsRepository, SqliteProjectRepository, SqliteSearchRepository,
@@ -10,11 +12,13 @@ use estudy_storage::{
 };
 use estudy_ui::features::focus::FocusMessage;
 use estudy_ui::{
-    AppMessage, AppRoute, CalendarState, EstudyApp, HomeDashboardData, HomeLoadState,
-    PaletteAction, PaletteCommand, PaletteMessage, ProjectsState,
+    AppMessage, AppRoute, CalendarMessage, CalendarState, EstudyApp, HomeDashboardData,
+    HomeLoadState, PaletteAction, PaletteCommand, PaletteMessage, ProjectsMessage, ProjectsState,
+    SecondBrainMessage, TasksViewMode,
 };
 use estudy_ui_kit::{FONT_SANS, Icon, embedded_fonts};
 use rusqlite::Connection;
+use screenshot_cli::{ScreenshotOptions, parse_screenshot_args, save_screenshot_png};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -25,6 +29,13 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 const LOCAL_WALLET_SECRET: &[u8] = b"estudy-local-wallet-v1";
 
+#[derive(Debug, Clone)]
+enum ShellMessage {
+    App(AppMessage),
+    TriggerScreenshot,
+    ScreenshotCaptured(iced::window::Screenshot),
+}
+
 struct DesktopShell {
     app: EstudyApp,
     conn: Option<Connection>,
@@ -33,6 +44,8 @@ struct DesktopShell {
     last_focus_tick: Option<Instant>,
     last_fts_query: Option<String>,
     _log_guard: Option<WorkerGuard>,
+    screenshot_opts: Option<ScreenshotOptions>,
+    screenshot_requested: bool,
 }
 
 impl Drop for DesktopShell {
@@ -42,16 +55,126 @@ impl Drop for DesktopShell {
     }
 }
 
+fn apply_screenshot_overrides(app: &mut EstudyApp, opts: &ScreenshotOptions) {
+    app.route = opts.route;
+    app.loadout.theme_preset = opts.preset;
+    app.loadout.theme_mode = opts.mode;
+    app.nav_sidebar_open = opts.sidebar_open;
+    app.window_size = (opts.width, opts.height);
+
+    let Some(subview) = opts.subview.as_deref() else {
+        return;
+    };
+
+    let now = Utc::now();
+    let today = now.date_naive();
+    match subview {
+        "week" => {
+            app.projects_state
+                .update(ProjectsMessage::SetTasksViewMode(TasksViewMode::Week), now);
+        }
+        "calendar" => match opts.route {
+            AppRoute::Projects => app.projects_state.update(
+                ProjectsMessage::SetTasksViewMode(TasksViewMode::Calendar),
+                now,
+            ),
+            AppRoute::Calendar => app
+                .calendar_state
+                .update(CalendarMessage::SetViewMode(CalendarViewMode::Month), now),
+            _ => {}
+        },
+        "kanban" => {
+            app.projects_state.update(
+                ProjectsMessage::SetTasksViewMode(TasksViewMode::Kanban),
+                now,
+            );
+        }
+        "list" => {
+            app.calendar_state
+                .update(CalendarMessage::SetViewMode(CalendarViewMode::Day), now);
+        }
+        "task-modal" => {
+            let msg = app.projects_state.tasks.first().map_or(
+                ProjectsMessage::OpenCreateTaskModal {
+                    date: Some(today),
+                    turn: TaskTurn::Morning,
+                },
+                |task| ProjectsMessage::OpenEditTaskModal(task.id.clone()),
+            );
+            app.projects_state.update(msg, now);
+        }
+        "day-peek" => {
+            app.calendar_state
+                .update(CalendarMessage::OpenDayPeek(today), now);
+        }
+        "note-modal" => {
+            let msg = app
+                .second_brain_state
+                .notes
+                .first()
+                .map_or(SecondBrainMessage::CreateNote, |note| {
+                    SecondBrainMessage::SelectNote(note.id.clone())
+                });
+            app.second_brain_state.update(msg, now);
+        }
+        "today-drawer" => {
+            app.calendar_state.today_drawer_open = true;
+        }
+        "palette" => {
+            app.update(AppMessage::Palette(PaletteMessage::Toggle));
+        }
+        "focus-running" => {
+            app.update(AppMessage::Focus(FocusMessage::SelectPreset(
+                PomodoroPreset::Classic25_5,
+            )));
+            app.update(AppMessage::Focus(FocusMessage::Start));
+        }
+        _ => {}
+    }
+}
+
 impl DesktopShell {
-    fn boot() -> Self {
+    fn boot_sample_screenshot(
+        clock: Arc<dyn estudy_domain::ClockPort>,
+        projects_state: ProjectsState,
+        calendar_state: CalendarState,
+        opts: ScreenshotOptions,
+    ) -> Self {
+        let home_state = HomeLoadState::Ready(Box::new(HomeDashboardData::sample_workspace(
+            "Estudante".to_string(),
+        )));
+        let mut app = EstudyApp::with_state(clock, home_state, projects_state, calendar_state);
+        apply_screenshot_overrides(&mut app, &opts);
+        Self {
+            app,
+            conn: None,
+            profile_id: None,
+            audio: None,
+            last_focus_tick: None,
+            last_fts_query: None,
+            _log_guard: None,
+            screenshot_opts: Some(opts),
+            screenshot_requested: false,
+        }
+    }
+
+    fn boot(screenshot_opts: Option<ScreenshotOptions>) -> Self {
         let boot_started = Instant::now();
         let clock = Arc::new(SystemClock);
         let now = Utc::now();
-        let mut projects_state = ProjectsState::sample(now.date_naive(), now);
-        let mut calendar_state =
-            CalendarState::sample(now.date_naive(), now, &projects_state.projects);
+        let projects_state = ProjectsState::sample(now.date_naive(), now);
+        let calendar_state = CalendarState::sample(now.date_naive(), now, &projects_state.projects);
 
         let cli_dir = parse_data_dir_arg();
+        if let Some(opts) = screenshot_opts.as_ref().filter(|_| cli_dir.is_none()) {
+            return Self::boot_sample_screenshot(
+                clock,
+                projects_state,
+                calendar_state,
+                opts.clone(),
+            );
+        }
+
         let paths_res = AppPaths::resolve(cli_dir.as_deref()).and_then(|paths| {
             paths.ensure_dirs()?;
             Ok(paths)
@@ -63,76 +186,128 @@ impl DesktopShell {
             .and_then(|paths| init_structured_logging(&paths.logs_dir()));
 
         match paths_res.and_then(|paths| open_and_migrate_with_paths(&paths)) {
-            Ok((conn, profile_id, display_name)) => {
-                if let Ok(loaded) = load_or_seed_projects(&conn, &projects_state) {
-                    projects_state = loaded;
-                }
-                if let Ok(loaded_cal) = load_or_seed_calendar(&conn, &calendar_state) {
-                    calendar_state = loaded_cal;
-                }
-                let today_focus =
-                    SqliteFocusRepository::today_focus_minutes(&conn, now.date_naive())
-                        .unwrap_or(0);
-                let home_state = HomeLoadState::Ready(Box::new(
-                    HomeDashboardData::sample_workspace(display_name),
-                ));
-                let mut app =
-                    EstudyApp::with_state(clock, home_state, projects_state, calendar_state);
-                if let Ok(habits) = SqliteHabitsRepository::list_habits(&conn)
-                    && !habits.is_empty()
-                {
-                    app.habits_state.habits = habits;
-                }
-                if let Ok(notes) = SqliteSecondBrainRepository::list_notes(&conn)
-                    && !notes.is_empty()
-                {
-                    app.second_brain_state.selected_note_id = notes.first().map(|n| n.id.clone());
-                    app.second_brain_state.notes = notes;
-                }
-                app.focus_state.today_focused_minutes = today_focus;
-                let boot_ms = u64::try_from(boot_started.elapsed().as_millis()).unwrap_or(u64::MAX);
-                tracing::info!(
-                    target: "estudy.desktop",
-                    service_version = env!("CARGO_PKG_VERSION"),
-                    boot_ms,
-                    renderer = if cfg!(feature = "gpu") { "wgpu" } else { "tiny-skia" },
-                    "aplicativo desktop inicializado"
-                );
-                Self {
-                    app,
-                    conn: Some(conn),
-                    profile_id: Some(profile_id),
-                    audio: None,
-                    last_focus_tick: None,
-                    last_fts_query: None,
-                    _log_guard: log_guard,
-                }
-            }
+            Ok((conn, profile_id, display_name)) => Self::boot_loaded_shell(
+                clock,
+                projects_state,
+                calendar_state,
+                conn,
+                profile_id,
+                display_name,
+                boot_started,
+                log_guard,
+                screenshot_opts,
+            ),
             Err(err) => {
                 tracing::error!(
                     target: "estudy.desktop",
                     error = %err,
                     "falha ao inicializar banco local"
                 );
+                let mut app = EstudyApp::with_state(
+                    clock,
+                    HomeLoadState::Error(err.to_string()),
+                    projects_state,
+                    calendar_state,
+                );
+                if let Some(opts) = &screenshot_opts {
+                    apply_screenshot_overrides(&mut app, opts);
+                }
                 Self {
-                    app: EstudyApp::with_state(
-                        clock,
-                        HomeLoadState::Error(err.to_string()),
-                        projects_state,
-                        calendar_state,
-                    ),
+                    app,
                     conn: None,
                     profile_id: None,
                     audio: None,
                     last_focus_tick: None,
                     last_fts_query: None,
                     _log_guard: log_guard,
+                    screenshot_opts,
+                    screenshot_requested: false,
                 }
             }
         }
     }
 
-    fn update(&mut self, mut message: AppMessage) {
+    #[allow(clippy::too_many_arguments)]
+    fn boot_loaded_shell(
+        clock: Arc<dyn estudy_domain::ClockPort>,
+        mut projects_state: ProjectsState,
+        mut calendar_state: CalendarState,
+        conn: Connection,
+        profile_id: EntityId,
+        display_name: String,
+        boot_started: Instant,
+        log_guard: Option<WorkerGuard>,
+        screenshot_opts: Option<ScreenshotOptions>,
+    ) -> Self {
+        let today = clock.now_utc().date_naive();
+        if let Ok(loaded) = load_or_seed_projects(&conn, &projects_state) {
+            projects_state = loaded;
+        }
+        if let Ok(loaded_cal) = load_or_seed_calendar(&conn, &calendar_state) {
+            calendar_state = loaded_cal;
+        }
+        let today_focus = SqliteFocusRepository::today_focus_minutes(&conn, today).unwrap_or(0);
+        let home_state =
+            HomeLoadState::Ready(Box::new(HomeDashboardData::sample_workspace(display_name)));
+        let mut app = EstudyApp::with_state(clock, home_state, projects_state, calendar_state);
+        if let Ok(habits) = SqliteHabitsRepository::list_habits(&conn)
+            && !habits.is_empty()
+        {
+            app.habits_state.habits = habits;
+        }
+        if let Ok(notes) = SqliteSecondBrainRepository::list_notes(&conn)
+            && !notes.is_empty()
+        {
+            app.second_brain_state.selected_note_id = notes.first().map(|n| n.id.clone());
+            app.second_brain_state.notes = notes;
+        }
+        app.focus_state.today_focused_minutes = today_focus;
+        let boot_ms = u64::try_from(boot_started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        tracing::info!(
+            target: "estudy.desktop",
+            service_version = env!("CARGO_PKG_VERSION"),
+            boot_ms,
+            renderer = if cfg!(feature = "gpu") { "wgpu" } else { "tiny-skia" },
+            "aplicativo desktop inicializado"
+        );
+        if let Some(opts) = &screenshot_opts {
+            apply_screenshot_overrides(&mut app, opts);
+        }
+        Self {
+            app,
+            conn: Some(conn),
+            profile_id: Some(profile_id),
+            audio: None,
+            last_focus_tick: None,
+            last_fts_query: None,
+            _log_guard: log_guard,
+            screenshot_opts,
+            screenshot_requested: false,
+        }
+    }
+
+    fn update(&mut self, message: ShellMessage) -> iced::Task<ShellMessage> {
+        let mut message = match message {
+            ShellMessage::App(app_msg) => app_msg,
+            ShellMessage::TriggerScreenshot => {
+                if self.screenshot_requested {
+                    return iced::Task::none();
+                }
+                self.screenshot_requested = true;
+                return iced::window::oldest().and_then(|id| {
+                    iced::window::screenshot(id).map(ShellMessage::ScreenshotCaptured)
+                });
+            }
+            ShellMessage::ScreenshotCaptured(shot) => {
+                if let Some(opts) = &self.screenshot_opts
+                    && let Err(err) = save_screenshot_png(&shot, &opts.output_path)
+                {
+                    eprintln!("erro ao salvar screenshot: {err}");
+                }
+                return iced::exit();
+            }
+        };
+
         if let AppMessage::Focus(FocusMessage::TickSeconds(fallback_secs)) = &message {
             let now_mono = Instant::now();
             let elapsed_secs = self
@@ -170,6 +345,7 @@ impl DesktopShell {
         }
 
         self.persist_dirty_changes();
+        iced::Task::none()
     }
 
     fn sync_audio_engine(&mut self) {
@@ -233,6 +409,7 @@ impl DesktopShell {
         let (dirty_projects, dirty_tasks) = self.app.projects_state.take_dirty();
         let deleted_tasks = self.app.projects_state.take_deleted_tasks();
         let dirty_events = self.app.calendar_state.take_dirty_events();
+        let deleted_events = self.app.calendar_state.take_deleted_events();
         let (dirty_habits, deleted_habits) = self.app.habits_state.take_dirty();
         let (dirty_notes, deleted_notes) = self.app.second_brain_state.take_dirty();
         let pending_focus = self.app.focus_state.take_pending_sessions();
@@ -240,6 +417,7 @@ impl DesktopShell {
             && dirty_tasks.is_empty()
             && deleted_tasks.is_empty()
             && dirty_events.is_empty()
+            && deleted_events.is_empty()
             && dirty_habits.is_empty()
             && deleted_habits.is_empty()
             && dirty_notes.is_empty()
@@ -293,18 +471,13 @@ impl DesktopShell {
             }
         }
 
-        for event_id in &dirty_events {
-            if let Some(event) = self
-                .app
-                .calendar_state
-                .events
-                .iter()
-                .find(|item| item.id == *event_id)
-                && SqliteCalendarRepository::save_event(conn, event, None).is_ok()
-            {
-                persisted += 1;
-            }
-        }
+        persisted += Self::persist_calendar_changes(
+            conn,
+            &self.app.calendar_state.events,
+            &dirty_events,
+            &deleted_events,
+            now_del,
+        );
 
         if let Some(profile_id) = &self.profile_id {
             for draft in pending_focus {
@@ -332,6 +505,29 @@ impl DesktopShell {
             elapsed_us,
             "persistência seletiva concluída"
         );
+    }
+
+    fn persist_calendar_changes(
+        conn: &mut Connection,
+        events: &[estudy_domain::CalendarEvent],
+        dirty_events: &[EntityId],
+        deleted_events: &[EntityId],
+        deleted_at: chrono::DateTime<Utc>,
+    ) -> usize {
+        let mut count = 0usize;
+        for event_id in dirty_events {
+            if let Some(event) = events.iter().find(|item| item.id == *event_id)
+                && SqliteCalendarRepository::save_event(conn, event, None).is_ok()
+            {
+                count += 1;
+            }
+        }
+        for event_id in deleted_events {
+            if SqliteCalendarRepository::soft_delete_event(conn, event_id, deleted_at).is_ok() {
+                count += 1;
+            }
+        }
+        count
     }
 
     fn run_fts_palette_search(&mut self, query: &str) {
@@ -384,21 +580,26 @@ impl DesktopShell {
         }
     }
 
-    fn subscription(&self) -> iced::Subscription<AppMessage> {
-        let base = self.app.subscription();
+    fn subscription(&self) -> iced::Subscription<ShellMessage> {
+        let base = self.app.subscription().map(ShellMessage::App);
+        let mut subs = vec![base];
         if self.app.is_focus_ticking() {
-            iced::Subscription::batch([
-                base,
+            subs.push(
                 iced::time::every(Duration::from_secs(1))
-                    .map(|_| AppMessage::Focus(FocusMessage::TickSeconds(1))),
-            ])
-        } else {
-            base
+                    .map(|_| ShellMessage::App(AppMessage::Focus(FocusMessage::TickSeconds(1)))),
+            );
         }
+        if self.screenshot_opts.is_some() && !self.screenshot_requested {
+            subs.push(
+                iced::time::every(Duration::from_millis(250))
+                    .map(|_| ShellMessage::TriggerScreenshot),
+            );
+        }
+        iced::Subscription::batch(subs)
     }
 
-    fn view(&self) -> iced::Element<'_, AppMessage> {
-        self.app.view()
+    fn view(&self) -> iced::Element<'_, ShellMessage> {
+        self.app.view().map(ShellMessage::App)
     }
 }
 
@@ -502,12 +703,31 @@ fn load_or_seed_calendar(
 }
 
 fn main() -> iced::Result {
-    let mut app = iced::application(DesktopShell::boot, DesktopShell::update, DesktopShell::view)
-        .title("eStudy")
-        .default_font(FONT_SANS)
-        .subscription(DesktopShell::subscription)
-        .window_size((1360.0, 840.0))
-        .centered();
+    let screenshot_opts = parse_screenshot_args(std::env::args_os().skip(1));
+    let boot_opts = screenshot_opts.clone();
+
+    let mut app = iced::application(
+        move || DesktopShell::boot(boot_opts.clone()),
+        DesktopShell::update,
+        DesktopShell::view,
+    )
+    .title("eStudy")
+    .default_font(FONT_SANS)
+    .subscription(DesktopShell::subscription);
+
+    if let Some(opts) = &screenshot_opts {
+        let size = iced::Size::new(opts.width, opts.height);
+        app = app.window(iced::window::Settings {
+            size,
+            min_size: Some(size),
+            max_size: Some(size),
+            resizable: false,
+            position: iced::window::Position::Centered,
+            ..iced::window::Settings::default()
+        });
+    } else {
+        app = app.window_size((1360.0, 840.0)).centered();
+    }
 
     for font_bytes in embedded_fonts() {
         app = app.font(font_bytes);

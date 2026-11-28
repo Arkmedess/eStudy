@@ -968,6 +968,7 @@ dependencies = [
  "estudy-ui",
  "estudy-ui-kit",
  "iced",
+ "png",
  "rusqlite",
  "tracing",
  "tracing-appender",
